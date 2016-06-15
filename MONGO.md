@@ -6,9 +6,9 @@ brew install mongodb
 Startup mongo
 =====
 
-mkdir ~/Users/williamkamp/code/nordstrom/GeoFenceBeC/mongodb_data/
+mkdir ~/code/nordstrom/GeoFenceBeC/mongodb_data/
 
-mongod --dbpath ~/Users/williamkamp/code/nordstrom/GeoFenceBeC/mongodb_data/
+mongod --dbpath ~/code/nordstrom/GeoFenceBeC/mongodb_data/
 
 Mongodb console
 =====
