@@ -3,14 +3,15 @@
 //
 
 #include "database.h"
-#include <jansson.h>
 
 //region STRUCTURES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //endregion
 
 //region PRIVATE INTERFACE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-bool validateFenceRecord(json_t *pJson);
+struct Record* createRecord();
+char* createMessageOk();
+char* createMessageValidationError();
 
 //endregion
 
@@ -110,55 +111,104 @@ bool validateFenceRecord(json_t *pJson);
 //    mongoc_collection_destroy(collection);
 //}
 
-bool validateFenceRecord(json_t *pJson) {
-    if (pJson != NULL) {
-        json_t *obj = json_object_get(pJson, "identifier");
+json_t* validateFenceRecord(const char *pJson) {
+    json_error_t error;
+    json_t *json = json_loads(pJson, strlen(pJson), &error);
+    bool result = true;
+    if (json != NULL) {
+        json_t *obj = json_object_get(json, "identifier");
         if (!json_is_string(obj)) {
-            return false;
+            result = false;
         }
-        obj = json_object_get(pJson, "latitude");
-        if (!json_is_real(obj)) {
-            return false;
+        obj = json_object_get(json, "radius");
+        if (result && !json_is_number(obj)) {
+            result = false;
         }
-        obj = json_object_get(pJson, "longitude");
-        if (!json_is_real(obj)) {
-            return false;
+        obj = json_object_get(json, "latitude");
+        if (result && !json_is_real(obj)) {
+            result = false;
         }
-        obj = json_object_get(pJson, "entry_time");
-        if (!json_is_number(obj)) {
-            return false;
+        obj = json_object_get(json, "longitude");
+        if (result && !json_is_real(obj)) {
+            result = false;
         }
-    } else {
-        return false;
+        obj = json_object_get(json, "entry_time");
+        if (result && !json_is_number(obj)) {
+            result = false;
+        }
     }
-    return true;
+    if (result) {
+        return json;
+    } else {
+        json_decref(json);
+        return NULL;
+    }
 }
 
 //endregion
 
 //region PUBLIC FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-int insertFenceRecord(const char* pJson, mongoc_client_t *client) {
-    int retVal = 1;
-    json_error_t error;
-    json_t *json = json_loads(pJson, strlen(pJson), &error);
-
-    if (validateFenceRecord(json)) {
+struct Record* insertFenceRecord(const char* pJson, mongoc_client_t *pClient) {
+    struct Record *retVal = createRecord();
+    json_t *record = validateFenceRecord(pJson);
+    if (record) {
         mongoc_collection_t *collection;
         bson_error_t bsonError;
         bson_t *doc;
-        collection = mongoc_client_get_collection(client, DB, COLLECTION_FENCES);
+        collection = mongoc_client_get_collection(pClient, DB, COLLECTION_FENCES);
         doc = bson_new_from_json((const uint8_t *)pJson, -1, &bsonError);
         if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, doc, NULL, &bsonError)) {
-            fprintf(stderr, "%s\n", bsonError.message);
+            retVal->message = malloc(strlen(bsonError.message));
+            strcpy(retVal->message, bsonError.message);
+            retVal->record = NULL;
         } else {
-            retVal = 0;
+            char *value = bson_as_json(doc, NULL);
+            json_error_t error;
+            retVal->record = json_loads(value, strlen(value), &error);
+            retVal->message = createMessageOk();
+            bson_free(value);
         }
-
         bson_destroy(doc);
         mongoc_collection_destroy(collection);
+    } else {
+        retVal->record = NULL;
+        retVal->message = createMessageValidationError();
     }
     return retVal;
+}
+
+char* createMessageOk() {
+    char *msg = "ok";
+    char *retVal = malloc(sizeof(char) * strlen(msg));
+    strcpy(retVal, msg);
+    return retVal;
+}
+
+char* createMessageValidationError() {
+    char *msg = "validation error";
+    char *retVal = malloc(sizeof(char) * strlen(msg));
+    strcpy(retVal, msg);
+    return retVal;
+}
+
+struct Record* createRecord() {
+    struct Record *retVal = malloc(sizeof(struct Record));
+    retVal->message = NULL;
+    retVal->record = NULL;
+    return retVal;
+}
+
+void deleteRecord(struct Record* pResult) {
+    if (NULL != pResult) {
+        if (NULL != pResult->record) {
+            json_decref(pResult->record);
+        }
+        if (NULL != pResult->message) {
+            free(pResult->message);
+        }
+        free(pResult);
+    }
 }
 
 //endregion

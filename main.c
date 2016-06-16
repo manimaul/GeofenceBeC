@@ -101,7 +101,27 @@ int answerConnection(void *pCls,
                      size_t *pUploadDataSize,
                      void **pConnCls) {
 
-    /**
+    /*
+     * Fetch the request body
+     */
+    struct ConnectionInfo *connectionInfo = *pConnCls;
+    if (NULL == *pConnCls) {
+        connectionInfo = malloc(sizeof(struct ConnectionInfo));
+        *pConnCls = (void *) connectionInfo;
+        return MHD_YES;
+    }
+    if (*pUploadDataSize) {
+        size_t len = *pUploadDataSize;
+        if (len > 0) {
+            char *body = malloc(len);
+            strcpy(body, pUploadData);
+            connectionInfo->body = body;
+        }
+        *pUploadDataSize = 0;
+        return MHD_YES;
+    }
+
+    /*
      * Answer GET requests
      */
     if (0 == strcmp(pMethod, METHOD_GET)) {
@@ -112,6 +132,7 @@ int answerConnection(void *pCls,
             return handleRoot(pConn);
         }
     }
+
     /*
      * Answer POST requests
      */
@@ -120,22 +141,6 @@ int answerConnection(void *pCls,
          * Answer /fence_entry endpoint
          */
         if (0 == strcmp(pUrl, "/fence_entry")) {
-            struct ConnectionInfo *connectionInfo = *pConnCls;
-            if (NULL == *pConnCls) {
-                connectionInfo = malloc(sizeof(struct ConnectionInfo));
-                *pConnCls = (void *) connectionInfo;
-                return MHD_YES;
-            }
-            if (*pUploadDataSize) {
-                size_t len = *pUploadDataSize;
-                if (len > 0) {
-                    char *body = malloc(len);
-                    strcpy(body, pUploadData);
-                    connectionInfo->body = body;
-                }
-                *pUploadDataSize = 0;
-                return MHD_YES;
-            }
             return handleFenceEntry(pConn, pCls, connectionInfo);
         }
     }
@@ -143,6 +148,7 @@ int answerConnection(void *pCls,
     /*
      * Answer with 404 not found
      */
+    *pUploadDataSize = 0;
     return handleNotFound(pConn);
 }
 #pragma clang diagnostic pop
@@ -168,21 +174,37 @@ int handleFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, st
     mongoc_client_pool_t *pool = pData->pool;
     mongoc_client_t *client;
     client = mongoc_client_pool_pop(pool);
-    insertFenceRecord(pConnInfo->body, client);
+    struct Record *record = insertFenceRecord(pConnInfo->body, client);
     mongoc_client_pool_push(pool, client);
+
+    /*
+     * Craft json response
+     */
+    json_t *json_response = json_object();
+    unsigned int statusCode = MHD_HTTP_BAD_REQUEST;
+    if (record) {
+        json_object_set(json_response, "message", json_string(record->message));
+        json_object_set(json_response, "record", record->record);
+        statusCode = MHD_HTTP_OK;
+    }
+    char *responseBody = json_dumps(json_response, JSON_COMPACT);
 
     /*
      * Queue a json response
      */
-    json_t *json_response = json_object();
-    json_object_set(json_response, "message", json_string("OK"));
-    char *page = json_dumps(json_response, JSON_COMPACT);
     struct MHD_Response *response;
-    response = MHD_create_response_from_buffer(strlen(page), (void *) page, MHD_RESPMEM_PERSISTENT);
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_PERSISTENT);
     MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
-    int ret = MHD_queue_response(pConn, MHD_HTTP_OK, response);
+    int ret = MHD_queue_response(pConn, statusCode, response);
+
+    /**
+     * Cleanup
+     */
     MHD_destroy_response(response);
-    free(page); //https://jansson.readthedocs.io/en/2.7/apiref.html#encoding
+    deleteRecord(record);
+    json_decref(json_response);
+    free(responseBody);
+
     return ret;
 }
 
