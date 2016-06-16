@@ -1,20 +1,27 @@
-#Dependencies
+#GeoFenceBeC
+#### An http micro-web service and REST API written in C which includes a NoSQL data store and an http server.
 
-* MongoDb
-`brew install mongodb`
+####Library Dependencies
 
-* MongoDb C Driver = https://github.com/mongodb/mongo-c-driver
-* http://api.mongodb.com/c/current/
+* CMake
+https://cmake.org/
+`brew install cmake`
+
+* MongoDb C Driver
+https://github.com/mongodb/mongo-c-driver
+http://api.mongodb.com/c/current/
 `brew install mongo-c`
 
-* http://www.digip.org/jansson/
-* https://jansson.readthedocs.io/en/2.7/apiref.html
+* Jansson
+http://www.digip.org/jansson/
+https://jansson.readthedocs.io/en/2.7/apiref.html
 `brew install jansson`
 
-* https://www.gnu.org/software/libmicrohttpd/
+* Libmicrohttpd
+https://www.gnu.org/software/libmicrohttpd/
 `brew install microhttpd`
 
-#Structure
+####Code is organized with the following regions which are collapsible in CLion.
 
 ```
 //region STRUCTURES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
