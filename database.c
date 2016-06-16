@@ -125,7 +125,7 @@ bool validateFenceRecord(json_t *pJson) {
             return false;
         }
         obj = json_object_get(pJson, "entry_time");
-        if (!json_is_integer(obj)) {
+        if (!json_is_number(obj)) {
             return false;
         }
     } else {

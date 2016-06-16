@@ -45,7 +45,7 @@ int handleRoot(struct MHD_Connection *pConn);
 /**
  * Request handler for /fence_entry endpoint
  */
-int handleFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData);
+int handleFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, struct ConnectionInfo *pConnInfo);
 
 /**
  * Request handler for 404 - resource not found
@@ -96,26 +96,23 @@ int answerConnection(void *pCls,
         }
     } else if (0 == strcmp(pMethod, METHOD_POST)) {
         if (0 == strcmp(pUrl, "/fence_entry")) {
-            struct ConnectionInfo *connectionInfo;
+            struct ConnectionInfo *connectionInfo = *pConnCls;
             if (NULL == *pConnCls) {
                 connectionInfo = malloc(sizeof(struct ConnectionInfo));
                 *pConnCls = (void *) connectionInfo;
                 return MHD_YES;
             }
-
-            connectionInfo = *pConnCls;
-            if (connectionInfo != NULL) {
-                size_t len = strlen(pUploadData);
+            if (*pUploadDataSize) {
+                size_t len = *pUploadDataSize;
                 if (len > 0) {
                     char *body = malloc(len);
                     strcpy(body, pUploadData);
                     connectionInfo->body = body;
                 }
+                *pUploadDataSize = 0;
+                return MHD_YES;
             }
-
-            //todo: MHD_queue_response(pConn, 200, )
-
-            return handleFenceEntry(pConn, pCls);
+            return handleFenceEntry(pConn, pCls, connectionInfo);
         }
     }
 
@@ -134,11 +131,11 @@ int handleRoot(struct MHD_Connection *pConn) {
     return ret;
 }
 
-int handleFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData) {
+int handleFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, struct ConnectionInfo *pConnInfo) {
     mongoc_client_pool_t *pool = pData->pool;
     mongoc_client_t *client;
     client = mongoc_client_pool_pop(pool);
-    //insertFenceRecord()
+    insertFenceRecord(pConnInfo->body, client);
     mongoc_client_pool_push(pool, client);
 
     json_t *json_response = json_object();
@@ -192,10 +189,6 @@ int main() {
                                                  &answerConnection, data,
                                                  MHD_OPTION_NOTIFY_COMPLETED, requestCompleted,
                                                  NULL, MHD_OPTION_END);
-
-//    struct MHD_Daemon *daemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, PORT, NULL, NULL,
-//                                                 &answerConnection, data,
-//                                                 MHD_OPTION_END);
 
     if (NULL == daemon) {
         return 1;
