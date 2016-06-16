@@ -121,6 +121,9 @@ int answerConnection(void *pCls,
 #pragma clang diagnostic pop
 
 int handleRoot(struct MHD_Connection *pConn) {
+    /*
+     * Queue an html response
+     */
     const char *page = "<html><body>GeoFence Mark API</body></html>";
     struct MHD_Response *response;
     int ret;
@@ -132,12 +135,18 @@ int handleRoot(struct MHD_Connection *pConn) {
 }
 
 int handleFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, struct ConnectionInfo *pConnInfo) {
+    /*
+     * Insert the record in the db
+     */
     mongoc_client_pool_t *pool = pData->pool;
     mongoc_client_t *client;
     client = mongoc_client_pool_pop(pool);
     insertFenceRecord(pConnInfo->body, client);
     mongoc_client_pool_push(pool, client);
 
+    /*
+     * Queue a json response
+     */
     json_t *json_response = json_object();
     json_object_set(json_response, "message", json_string("OK"));
     char *page = json_dumps(json_response, JSON_COMPACT);
@@ -151,6 +160,9 @@ int handleFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, st
 }
 
 int handleNotFound(struct MHD_Connection *pConn) {
+    /*
+     * Queue an html response
+     */
     const char *page = "<html><body>Whoops! 404</body></html>";
     struct MHD_Response *response;
     int ret;
@@ -194,8 +206,15 @@ int main() {
         return 1;
     }
 
-    //wait for key to quit
-    getchar();
+    //wait for 'q' key to quit
+    printf("GeoFence Http daemon running - press 'q' to quit.");
+    waitChar:
+    {
+        int c = getchar();
+        if (c != 'q') {
+            goto waitChar;
+        }
+    };
 
     /**
      * Cleanup mongo-c
