@@ -7,7 +7,7 @@
 #define PORT 8080
 #define TEXT_HTML "text/html"
 #define APPLICATION_JSON "application/json"
-#define CONTENT_TYPE "text/html"
+#define CONTENT_TYPE "Content-type"
 #define METHOD_GET "GET"
 #define METHOD_POST "POST"
 
@@ -210,7 +210,7 @@ int main() {
      */
     mongoc_init();
 
-    /**
+    /*
      * Initialize mongo-c client pool
      */
     mongoc_client_pool_t *pool;
@@ -218,6 +218,9 @@ int main() {
     uri = mongoc_uri_new(DB_URL);
     pool = mongoc_client_pool_new(uri);
 
+    /*
+     * Setup the handler data to have access to the mongo-c client pool.
+     */
     struct HandlerData *data = malloc(sizeof(HandlerData));
     data->pool = pool;
 
@@ -229,19 +232,20 @@ int main() {
                                                  MHD_OPTION_NOTIFY_COMPLETED, requestCompleted,
                                                  NULL, MHD_OPTION_END);
 
-    if (NULL == daemon) {
-        return 1;
+    /*
+     * Wait for the 'q' key if the daemon was started
+     */
+    if (NULL != daemon) {
+        printf("GeoFence Http daemon running - press 'q' to quit.");
+        waitChar:
+        {
+            int c = getchar();
+            if (c != 'q') {
+                goto waitChar;
+            }
+        };
     }
 
-    //wait for 'q' key to quit
-    printf("GeoFence Http daemon running - press 'q' to quit.");
-    waitChar:
-    {
-        int c = getchar();
-        if (c != 'q') {
-            goto waitChar;
-        }
-    };
 
     /**
      * Cleanup mongo-c
