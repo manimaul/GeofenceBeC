@@ -26,7 +26,7 @@ struct ConnectionInfo {
 //region PRIVATE INTERFACE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /**
- * The handler function for all http requests.
+ * The handler function for all http requests that conforms to the MHD_AccessHandlerCallback protocol in microhttpd.h
  */
 int answerConnection(void *pCls,
                      struct MHD_Connection *pConn,
@@ -39,18 +39,26 @@ int answerConnection(void *pCls,
 
 /**
  * Request handler for / endpoint
+ *
+ * param pConn - the connection to queue a response to
  */
 int handleRoot(struct MHD_Connection *pConn);
 
 /**
  * Request handler for /fence_entry endpoint
+ *
+ * param pConn - the connection to enqueue a response to
+ * param pData - data to retrieve a MongoDb client from
+ * param pConnInfo - connection info to retrieve the request body
  */
 int handleFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, struct ConnectionInfo *pConnInfo);
 
 /**
  * Request handler for 404 - resource not found
+ *
+ * param pConn - the connection to enqueue a response to
  */
-int handleNotFound(struct MHD_Connection *connection);
+int handleNotFound(struct MHD_Connection *pConn);
 
 //endregion
 
@@ -58,6 +66,9 @@ int handleNotFound(struct MHD_Connection *connection);
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
+/**
+ * Request completion callback to perform cleanup after each request.
+ */
 static void requestCompleted(void *cls, struct MHD_Connection *connection, void **con_cls,
                              enum MHD_RequestTerminationCode toe) {
 
@@ -90,11 +101,24 @@ int answerConnection(void *pCls,
                      size_t *pUploadDataSize,
                      void **pConnCls) {
 
+    /**
+     * Answer GET requests
+     */
     if (0 == strcmp(pMethod, METHOD_GET)) {
+        /*
+         * Answer / endpoint
+         */
         if (0 == strcmp(pUrl, "/")) {
             return handleRoot(pConn);
         }
-    } else if (0 == strcmp(pMethod, METHOD_POST)) {
+    }
+    /*
+     * Answer POST requests
+     */
+    else if (0 == strcmp(pMethod, METHOD_POST)) {
+        /*
+         * Answer /fence_entry endpoint
+         */
         if (0 == strcmp(pUrl, "/fence_entry")) {
             struct ConnectionInfo *connectionInfo = *pConnCls;
             if (NULL == *pConnCls) {
@@ -116,6 +140,9 @@ int answerConnection(void *pCls,
         }
     }
 
+    /*
+     * Answer with 404 not found
+     */
     return handleNotFound(pConn);
 }
 #pragma clang diagnostic pop
