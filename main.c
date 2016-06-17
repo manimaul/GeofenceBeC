@@ -5,7 +5,7 @@
 #include "database.h"
 
 #define PORT 8080
-#define TEXT_HTML "text/html"
+//#define TEXT_HTML "text/html"
 #define APPLICATION_JSON "application/json"
 #define CONTENT_TYPE "Content-type"
 #define METHOD_GET "GET"
@@ -176,15 +176,27 @@ int answerConnection(void *pCls,
 
 int handleRoot(struct MHD_Connection *pConn) {
     /*
-     * Queue an html response
+     * Craft json response
      */
-    const char *page = "<html><body>GeoFence Mark API</body></html>";
+    json_t *json_response = json_object();
+    json_object_set(json_response, "message", json_string("GeoFence Mark API"));
+    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+
+    /*
+     * Queue a json response
+     */
     struct MHD_Response *response;
-    int ret;
-    response = MHD_create_response_from_buffer(strlen(page), (void *) page, MHD_RESPMEM_PERSISTENT);
-    MHD_add_response_header(response, CONTENT_TYPE, TEXT_HTML);
-    ret = MHD_queue_response(pConn, MHD_HTTP_OK, response);
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_PERSISTENT);
+    MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
+    int ret = MHD_queue_response(pConn, MHD_HTTP_OK, response);
+
+    /*
+     * Cleanup
+     */
     MHD_destroy_response(response);
+    json_decref(json_response);
+    free(responseBody);
+
     return ret;
 }
 
@@ -263,7 +275,7 @@ int handlePostFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData
     MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
     int ret = MHD_queue_response(pConn, statusCode, response);
 
-    /**
+    /*
      * Cleanup
      */
     MHD_destroy_response(response);
@@ -276,15 +288,27 @@ int handlePostFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData
 
 int handleNotFound(struct MHD_Connection *pConn) {
     /*
-     * Queue an html response
+     * Craft json response
      */
-    const char *page = "<html><body>Whoops! 404</body></html>";
+    json_t *json_response = json_object();
+    json_object_set(json_response, "message", json_string("Not Found"));
+    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+
+    /*
+     * Queue a json response
+     */
     struct MHD_Response *response;
-    int ret;
-    response = MHD_create_response_from_buffer(strlen(page), (void *) page, MHD_RESPMEM_PERSISTENT);
-    MHD_add_response_header(response, CONTENT_TYPE, TEXT_HTML);
-    ret = MHD_queue_response(pConn, MHD_HTTP_NOT_FOUND, response);
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_PERSISTENT);
+    MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
+    int ret = MHD_queue_response(pConn, MHD_HTTP_NOT_FOUND, response);
+
+    /*
+     * Cleanup
+     */
     MHD_destroy_response(response);
+    json_decref(json_response);
+    free(responseBody);
+
     return ret;
 }
 
