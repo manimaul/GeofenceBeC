@@ -10,6 +10,7 @@
 //region PRIVATE INTERFACE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 struct Record* createRecord();
+json_t* validateFenceRecord(const char* pJson);
 char* createMessageOk();
 char* createMessageValidationError();
 
@@ -172,9 +173,37 @@ struct Record* insertFenceRecord(const char* pJson, mongoc_client_t *pClient) {
         bson_destroy(doc);
         mongoc_collection_destroy(collection);
     } else {
-        retVal->record = NULL;
         retVal->message = createMessageValidationError();
     }
+    return retVal;
+}
+
+struct Record* getFenceRecord(const char* pIdentifier, mongoc_client_t *pClient) {
+    struct Record *retVal = createRecord();
+
+    mongoc_collection_t *collection;
+    mongoc_cursor_t *cursor;
+    const bson_t *doc;
+    bson_t *query;
+
+    collection = mongoc_client_get_collection(pClient, DB, COLLECTION_FENCES);
+    query = bson_new();
+    BSON_APPEND_UTF8(query, "identifier", pIdentifier);
+    cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 1, 0, query, NULL, NULL);
+
+    while (mongoc_cursor_next(cursor, &doc)) {
+        json_error_t error;
+        char* value = bson_as_json(doc, NULL);
+        retVal->record = json_loads(value, strlen(value), &error);
+        retVal->message = createMessageOk();
+        bson_free(value);
+        break;
+    }
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+
     return retVal;
 }
 

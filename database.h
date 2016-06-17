@@ -18,14 +18,19 @@ struct Record {
     char* message;
 };
 
-json_t* validateFenceRecord(const char* pJson);
-
 /**
  * Inserts a fence record when the record is valid.
  *
- * returns json string of inserted record which you must deleteRecord()
+ * returns struct Record which you must later deleteRecord()
  */
 struct Record* insertFenceRecord(const char* pJson, mongoc_client_t *pClient);
+
+/**
+ * Retrieve a fence record with an identifier
+ *
+ * returns struct Record which you must later deleteRecord()
+ */
+struct Record* getFenceRecord(const char* pIdentifier, mongoc_client_t *pClient);
 
 /**
  *

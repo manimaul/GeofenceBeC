@@ -51,7 +51,9 @@ int handleRoot(struct MHD_Connection *pConn);
  * param pData - data to retrieve a MongoDb client from
  * param pConnInfo - connection info to retrieve the request body
  */
-int handleFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, struct ConnectionInfo *pConnInfo);
+int handlePostFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, struct ConnectionInfo *pConnInfo);
+
+int handleGetFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, const char* pId);
 
 /**
  * Request handler for 404 - resource not found
@@ -64,25 +66,34 @@ int handleNotFound(struct MHD_Connection *pConn);
 
 //region STATIC FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+static struct ConnectionInfo* createConnectionInfo() {
+    struct ConnectionInfo* info = malloc(sizeof(struct ConnectionInfo));
+    info->body = NULL;
+    return info;
+}
+
+static void destroyConnectionInfo(struct ConnectionInfo* pInfo) {
+    if (NULL == pInfo) {
+        return;
+    }
+
+    if (NULL != pInfo->body) {
+        free(pInfo->body);
+    }
+    free(pInfo);
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
 /**
  * Request completion callback to perform cleanup after each request.
  */
-static void requestCompleted(void *cls, struct MHD_Connection *connection, void **con_cls,
-                             enum MHD_RequestTerminationCode toe) {
+static void requestCompleted(void *pCls, struct MHD_Connection *pConn, void **pConnCls,
+                             enum MHD_RequestTerminationCode pTermCode) {
 
-    struct ConnectionInfo *con_info = *con_cls;
-
-    if (NULL == con_info) {
-        return;
-    }
-
-    if (NULL != con_info->body) {
-        free(con_info->body);
-    }
-    free(con_info);
-    *con_cls = NULL;
+    struct ConnectionInfo *info = *pConnCls;
+    destroyConnectionInfo(info);
+    *pConnCls = NULL;
 }
 #pragma clang diagnostic pop
 
@@ -106,7 +117,7 @@ int answerConnection(void *pCls,
      */
     struct ConnectionInfo *connectionInfo = *pConnCls;
     if (NULL == *pConnCls) {
-        connectionInfo = malloc(sizeof(struct ConnectionInfo));
+        connectionInfo = createConnectionInfo();
         *pConnCls = (void *) connectionInfo;
         return MHD_YES;
     }
@@ -131,6 +142,16 @@ int answerConnection(void *pCls,
         if (0 == strcmp(pUrl, "/")) {
             return handleRoot(pConn);
         }
+
+        /*
+         * Answer /fence_entry endpoint
+         */
+        if (0 == strcmp(pUrl, "/fence_entry")) {
+            const char* val = MHD_lookup_connection_value (pConn, MHD_GET_ARGUMENT_KIND, "i");
+            if (val) {
+                return handleGetFenceEntry(pConn, pCls, val);
+            }
+        }
     }
 
     /*
@@ -141,7 +162,7 @@ int answerConnection(void *pCls,
          * Answer /fence_entry endpoint
          */
         if (0 == strcmp(pUrl, "/fence_entry")) {
-            return handleFenceEntry(pConn, pCls, connectionInfo);
+            return handlePostFenceEntry(pConn, pCls, connectionInfo);
         }
     }
 
@@ -167,7 +188,52 @@ int handleRoot(struct MHD_Connection *pConn) {
     return ret;
 }
 
-int handleFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, struct ConnectionInfo *pConnInfo) {
+int handleGetFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, const char* pId) {
+    /*
+     * Insert the record in the db
+     */
+    mongoc_client_pool_t *pool = pData->pool;
+    mongoc_client_t *client;
+    client = mongoc_client_pool_pop(pool);
+    struct Record *record = getFenceRecord(pId, client);
+    mongoc_client_pool_push(pool, client);
+
+    /*
+     * Craft json response
+     */
+    json_t *json_response = json_object();
+    unsigned int statusCode;
+    if (record->record) {
+        json_object_set(json_response, "message", json_string(record->message));
+        json_object_set(json_response, "record", record->record);
+        statusCode = MHD_HTTP_OK;
+    } else {
+        json_object_set(json_response, "message", json_string("Record not found"));
+        json_object_set(json_response, "record", record->record);
+        statusCode = MHD_HTTP_NOT_FOUND;
+    }
+    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+
+    /*
+     * Queue a json response
+     */
+    struct MHD_Response *response;
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_PERSISTENT);
+    MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
+    int ret = MHD_queue_response(pConn, statusCode, response);
+
+    /**
+     * Cleanup
+     */
+    MHD_destroy_response(response);
+    deleteRecord(record);
+    json_decref(json_response);
+    free(responseBody);
+
+    return ret;
+}
+
+int handlePostFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, struct ConnectionInfo *pConnInfo) {
     /*
      * Insert the record in the db
      */
