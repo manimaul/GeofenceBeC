@@ -18,31 +18,6 @@ char* createMessageValidationError();
 
 //region PRIVATE FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-//void mongoFind() {
-//    mongoc_client_t *client;
-//    mongoc_collection_t *collection;
-//    mongoc_cursor_t *cursor;
-//    const bson_t *doc;
-//    bson_t *query;
-//    char *str;
-//
-//    client = mongoc_client_new("mongodb://localhost:27017/");
-//    collection = mongoc_client_get_collection(client, "mydb", "mycoll");
-//    query = bson_new();
-//    cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 0, 0, query, NULL, NULL);
-//
-//    while (mongoc_cursor_next(cursor, &doc)) {
-//        str = bson_as_json(doc, NULL);
-//        printf("%s\n", str);
-//        bson_free(str);
-//    }
-//
-//    bson_destroy(query);
-//    mongoc_cursor_destroy(cursor);
-//    mongoc_collection_destroy(collection);
-//    mongoc_client_destroy(client);
-//}
-//
 //void mongoUpsert() {
 //    mongoc_collection_t *collection;
 //    mongoc_client_t *client;
@@ -85,31 +60,6 @@ char* createMessageValidationError();
 //
 //    mongoc_collection_destroy(collection);
 //    mongoc_client_destroy(client);
-//}
-//
-//void mongoInsert() {
-//    mongoc_client_t *client;
-//    mongoc_collection_t *collection;
-//    bson_error_t error;
-//    bson_oid_t oid;
-//    bson_t *doc;
-//
-//    mongoc_init();
-//
-//    client = mongoc_client_new("mongodb://localhost:27017/");
-//    collection = mongoc_client_get_collection(client, "mydb", "mycoll");
-//
-//    doc = bson_new();
-//    bson_oid_init(&oid, NULL);
-//    BSON_APPEND_OID(doc, "_id", &oid);
-//    BSON_APPEND_UTF8(doc, "hello", "world");
-//
-//    if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, doc, NULL, &error)) {
-//        fprintf(stderr, "%s\n", error.message);
-//    }
-//
-//    bson_destroy(doc);
-//    mongoc_collection_destroy(collection);
 //}
 
 json_t* validateFenceRecord(const char *pJson) {

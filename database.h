@@ -33,7 +33,7 @@ struct Record* insertFenceRecord(const char* pJson, mongoc_client_t *pClient);
 struct Record* getFenceRecord(const char* pIdentifier, mongoc_client_t *pClient);
 
 /**
- *
+ * Deallocate a record that has been retrieved.
  */
 void deleteRecord(struct Record* pRecord);
 
