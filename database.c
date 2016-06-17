@@ -9,10 +9,22 @@
 
 //region PRIVATE INTERFACE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+/**
+ * Create a Record structure that must be freed with void deleteRecord(struct Record* pResult)
+ */
 struct Record* createRecord();
+
+/**
+ * Validate a json string
+ *
+ * returns a json_t object when valid NULL otherwise
+ */
 json_t* validateFenceRecord(const char* pJson);
-char* createMessageOk();
-char* createMessageValidationError();
+
+/**
+ * Create a message that must bee freed with free()
+ */
+char* createMessage(char const * const msg);
 
 //endregion
 
@@ -117,13 +129,13 @@ struct Record* insertFenceRecord(const char* pJson, mongoc_client_t *pClient) {
             char *value = bson_as_json(doc, NULL);
             json_error_t error;
             retVal->record = json_loads(value, strlen(value), &error);
-            retVal->message = createMessageOk();
+            retVal->message = createMessage("ok");
             bson_free(value);
         }
         bson_destroy(doc);
         mongoc_collection_destroy(collection);
     } else {
-        retVal->message = createMessageValidationError();
+        retVal->message = createMessage("validation error");
     }
     return retVal;
 }
@@ -145,7 +157,7 @@ struct Record* getFenceRecord(const char* pIdentifier, mongoc_client_t *pClient)
         json_error_t error;
         char* value = bson_as_json(doc, NULL);
         retVal->record = json_loads(value, strlen(value), &error);
-        retVal->message = createMessageOk();
+        retVal->message = createMessage("ok");
         bson_free(value);
         break;
     }
@@ -157,17 +169,9 @@ struct Record* getFenceRecord(const char* pIdentifier, mongoc_client_t *pClient)
     return retVal;
 }
 
-char* createMessageOk() {
-    char *msg = "ok";
-    char *retVal = malloc(sizeof(char) * strlen(msg));
-    strcpy(retVal, msg);
-    return retVal;
-}
-
-char* createMessageValidationError() {
-    char *msg = "validation error";
-    char *retVal = malloc(sizeof(char) * strlen(msg));
-    strcpy(retVal, msg);
+char* createMessage(char const * const pMsg) {
+    char *retVal = malloc(sizeof(char) * strlen(pMsg));
+    strcpy(retVal, pMsg);
     return retVal;
 }
 
