@@ -53,7 +53,7 @@ int handleRoot(struct MHD_Connection *pConn);
  */
 int handlePostFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, struct ConnectionInfo *pConnInfo);
 
-int handleGetFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, const char* pId);
+int handleGetFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, const char *pId);
 
 /**
  * Request handler for 404 - resource not found
@@ -66,13 +66,13 @@ int handleNotFound(struct MHD_Connection *pConn);
 
 //region STATIC FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-static struct ConnectionInfo* createConnectionInfo() {
-    struct ConnectionInfo* info = malloc(sizeof(struct ConnectionInfo));
+static struct ConnectionInfo *createConnectionInfo() {
+    struct ConnectionInfo *info = malloc(sizeof(struct ConnectionInfo));
     info->body = NULL;
     return info;
 }
 
-static void destroyConnectionInfo(struct ConnectionInfo* pInfo) {
+static void destroyConnectionInfo(struct ConnectionInfo *pInfo) {
     if (NULL == pInfo) {
         return;
     }
@@ -85,6 +85,7 @@ static void destroyConnectionInfo(struct ConnectionInfo* pInfo) {
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
+
 /**
  * Request completion callback to perform cleanup after each request.
  */
@@ -95,6 +96,7 @@ static void requestCompleted(void *pCls, struct MHD_Connection *pConn, void **pC
     destroyConnectionInfo(info);
     *pConnCls = NULL;
 }
+
 #pragma clang diagnostic pop
 
 //endregion
@@ -103,6 +105,7 @@ static void requestCompleted(void *pCls, struct MHD_Connection *pConn, void **pC
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
+
 int answerConnection(void *pCls,
                      struct MHD_Connection *pConn,
                      const char *pUrl,
@@ -147,16 +150,16 @@ int answerConnection(void *pCls,
          * Answer /fence_entry endpoint
          */
         if (0 == strcmp(pUrl, "/fence_entry")) {
-            const char* val = MHD_lookup_connection_value (pConn, MHD_GET_ARGUMENT_KIND, "i");
+            const char *val = MHD_lookup_connection_value(pConn, MHD_GET_ARGUMENT_KIND, "i");
             if (val) {
                 return handleGetFenceEntry(pConn, pCls, val);
             }
         }
     }
 
-    /*
-     * Answer POST requests
-     */
+        /*
+         * Answer POST requests
+         */
     else if (0 == strcmp(pMethod, METHOD_POST)) {
         /*
          * Answer /fence_entry endpoint
@@ -172,6 +175,7 @@ int answerConnection(void *pCls,
     *pUploadDataSize = 0;
     return handleNotFound(pConn);
 }
+
 #pragma clang diagnostic pop
 
 int handleRoot(struct MHD_Connection *pConn) {
@@ -200,7 +204,7 @@ int handleRoot(struct MHD_Connection *pConn) {
     return ret;
 }
 
-int handleGetFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, const char* pId) {
+int handleGetFenceEntry(struct MHD_Connection *pConn, struct HandlerData *pData, const char *pId) {
     /*
      * Insert the record in the db
      */

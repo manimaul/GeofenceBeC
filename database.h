@@ -14,8 +14,8 @@
 #define COLLECTION_GPS_LOGS "gps_logs"
 
 struct Record {
-    json_t* record;
-    char* message;
+    json_t *record;
+    char *message;
 };
 
 /**
@@ -23,19 +23,19 @@ struct Record {
  *
  * returns struct Record which you must later deleteRecord()
  */
-struct Record* insertFenceRecord(const char* pJson, mongoc_client_t *pClient);
+struct Record *insertFenceRecord(const char *pJson, mongoc_client_t *pClient);
 
 /**
  * Retrieve a fence record with an identifier
  *
  * returns struct Record which you must later deleteRecord()
  */
-struct Record* getFenceRecord(const char* pIdentifier, mongoc_client_t *pClient);
+struct Record *getFenceRecord(const char *pIdentifier, mongoc_client_t *pClient);
 
 /**
  * Deallocate a record that has been retrieved.
  */
-void deleteRecord(struct Record* pRecord);
+void deleteRecord(struct Record *pRecord);
 
 /**
  * Inserts a gps_log record when the record is valid.
