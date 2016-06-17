@@ -53,7 +53,7 @@ OR Response without corresponding log
 Response when not found - 404
 ```
 {
-  "message": "Record not found"
+  "message": "DB_Record not found"
 }
 ```
 

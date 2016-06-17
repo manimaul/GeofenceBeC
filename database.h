@@ -13,35 +13,42 @@
 #define COLLECTION_FENCES "fences"
 #define COLLECTION_GPS_LOGS "gps_logs"
 
-struct Record {
+struct DB_Record {
     json_t *record;
     char *message;
 };
 
 /**
+ * Inserts a gps log record when the record is valid.
+ *
+ * returns struct DB_Record which you must later DB_deleteRecord()
+ */
+struct DB_Record *DB_insertGpsLogRecord(const char *pJson, mongoc_client_t *pClient);
+
+/**
  * Inserts a fence record when the record is valid.
  *
- * returns struct Record which you must later deleteRecord()
+ * returns struct DB_Record which you must later DB_deleteRecord()
  */
-struct Record *insertFenceRecord(const char *pJson, mongoc_client_t *pClient);
+struct DB_Record *DB_insertFenceRecord(const char *pJson, mongoc_client_t *pClient);
 
 /**
  * Retrieve a fence record with an identifier
  *
- * returns struct Record which you must later deleteRecord()
+ * returns struct DB_Record which you must later DB_deleteRecord()
  */
-struct Record *getFenceRecord(const char *pIdentifier, mongoc_client_t *pClient);
+struct DB_Record *DB_getFenceRecord(const char *pIdentifier, mongoc_client_t *pClient);
 
 /**
  * Deallocate a record that has been retrieved.
  */
-void deleteRecord(struct Record *pRecord);
+void DB_deleteRecord(struct DB_Record *pRecord);
 
 /**
  * Inserts a gps_log record when the record is valid.
  *
  * returns json string of inserted record which you must free()
  */
-//char* insertGpsLogRecord(const char* pJson, mongoc_client_t *pClient);
+//char* DB_insertGpsLogRecord(const char* pJson, mongoc_client_t *pClient);
 
 #endif //GEOFENCEBEC_DATABASE_H

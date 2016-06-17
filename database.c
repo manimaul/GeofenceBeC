@@ -10,28 +10,28 @@
 //region PRIVATE INTERFACE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /**
- * Create a Record structure that must be freed with void deleteRecord(struct Record* pResult)
+ * Create a DB_Record structure that must be freed with void DB_deleteRecord(struct DB_Record* pResult)
  */
-struct Record *createRecord();
+struct DB_Record *createRecord();
 
 /**
  * Validate a json string as a valid fence_record
  *
  * returns a json_t object when valid NULL otherwise
  */
-json_t *validateFenceRecord(const char *pJson);
+json_t *_validateFenceRecord(const char *pJson);
 
 /**
  * Validate a json string as a valid gps_log
  *
  * returns a json_t object when valid NULL otherwise
  */
-json_t *validateGpsLogRecord(const char *pJson);
+json_t *_validateGpsLogRecord(const char *pJson);
 
 /**
  * Create a message that must bee freed with free()
  */
-char *createMessage(char const *const msg);
+char *_createMessage(char const *const msg);
 
 //endregion
 
@@ -81,7 +81,7 @@ char *createMessage(char const *const msg);
 //    mongoc_client_destroy(client);
 //}
 
-json_t *validateGpsLogRecord(const char *pJson) {
+json_t *_validateGpsLogRecord(const char *pJson) {
     json_error_t error;
     json_t *json = json_loads(pJson, strlen(pJson), &error);
     bool result = true;
@@ -123,7 +123,7 @@ json_t *validateGpsLogRecord(const char *pJson) {
     }
 }
 
-json_t *validateFenceRecord(const char *pJson) {
+json_t *_validateFenceRecord(const char *pJson) {
     json_error_t error;
     json_t *json = json_loads(pJson, strlen(pJson), &error);
     bool result = true;
@@ -161,9 +161,37 @@ json_t *validateFenceRecord(const char *pJson) {
 
 //region PUBLIC FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-struct Record *insertFenceRecord(const char *pJson, mongoc_client_t *pClient) {
-    struct Record *retVal = createRecord();
-    json_t *record = validateFenceRecord(pJson);
+struct DB_Record *DB_insertGpsLogRecord(const char *pJson, mongoc_client_t *pClient) {
+    struct DB_Record *retVal = createRecord();
+    json_t *record = _validateGpsLogRecord(pJson);
+    if (record) {
+        mongoc_collection_t *collection;
+        bson_error_t bsonError;
+        bson_t *doc;
+        collection = mongoc_client_get_collection(pClient, DB, COLLECTION_GPS_LOGS);
+        doc = bson_new_from_json((const uint8_t *) pJson, -1, &bsonError);
+        if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, doc, NULL, &bsonError)) {
+            retVal->message = malloc(strlen(bsonError.message));
+            strcpy(retVal->message, bsonError.message);
+            retVal->record = NULL;
+        } else {
+            char *value = bson_as_json(doc, NULL);
+            json_error_t error;
+            retVal->record = json_loads(value, strlen(value), &error);
+            retVal->message = _createMessage("ok");
+            bson_free(value);
+        }
+        bson_destroy(doc);
+        mongoc_collection_destroy(collection);
+    } else {
+        retVal->message = _createMessage("validation error");
+    }
+    return retVal;
+}
+
+struct DB_Record *DB_insertFenceRecord(const char *pJson, mongoc_client_t *pClient) {
+    struct DB_Record *retVal = createRecord();
+    json_t *record = _validateFenceRecord(pJson);
     if (record) {
         mongoc_collection_t *collection;
         bson_error_t bsonError;
@@ -178,19 +206,19 @@ struct Record *insertFenceRecord(const char *pJson, mongoc_client_t *pClient) {
             char *value = bson_as_json(doc, NULL);
             json_error_t error;
             retVal->record = json_loads(value, strlen(value), &error);
-            retVal->message = createMessage("ok");
+            retVal->message = _createMessage("ok");
             bson_free(value);
         }
         bson_destroy(doc);
         mongoc_collection_destroy(collection);
     } else {
-        retVal->message = createMessage("validation error");
+        retVal->message = _createMessage("validation error");
     }
     return retVal;
 }
 
-struct Record *getFenceRecord(const char *pIdentifier, mongoc_client_t *pClient) {
-    struct Record *retVal = createRecord();
+struct DB_Record *DB_getFenceRecord(const char *pIdentifier, mongoc_client_t *pClient) {
+    struct DB_Record *retVal = createRecord();
 
     mongoc_collection_t *collection;
     mongoc_cursor_t *cursor;
@@ -206,7 +234,7 @@ struct Record *getFenceRecord(const char *pIdentifier, mongoc_client_t *pClient)
         json_error_t error;
         char *value = bson_as_json(doc, NULL);
         retVal->record = json_loads(value, strlen(value), &error);
-        retVal->message = createMessage("ok");
+        retVal->message = _createMessage("ok");
         bson_free(value);
         break;
     }
@@ -218,20 +246,20 @@ struct Record *getFenceRecord(const char *pIdentifier, mongoc_client_t *pClient)
     return retVal;
 }
 
-char *createMessage(char const *const pMsg) {
+char *_createMessage(char const *const pMsg) {
     char *retVal = malloc(sizeof(char) * strlen(pMsg));
     strcpy(retVal, pMsg);
     return retVal;
 }
 
-struct Record *createRecord() {
-    struct Record *retVal = malloc(sizeof(struct Record));
+struct DB_Record *createRecord() {
+    struct DB_Record *retVal = malloc(sizeof(struct DB_Record));
     retVal->message = NULL;
     retVal->record = NULL;
     return retVal;
 }
 
-void deleteRecord(struct Record *pResult) {
+void DB_deleteRecord(struct DB_Record *pResult) {
     if (NULL != pResult) {
         if (NULL != pResult->record) {
             json_decref(pResult->record);

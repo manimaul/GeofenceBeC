@@ -22,7 +22,14 @@ https://jansson.readthedocs.io/en/2.7/apiref.html<br/>
 https://www.gnu.org/software/libmicrohttpd/<br/>
 `brew install microhttpd`
 
-####Code is organized with the following regions which are collapsible in [CLion](https://www.jetbrains.com/clion/).
+##Conventions
+
+* Private functions are prefixed with `_`
+* Private static functions are prefixed with `__`
+* Public (including static) functions are prefixed with abbreviation representing file's single responsibility e.g.
+database.c functions are prefixed with `DB_`
+
+* Code is organized with the following regions which are collapsible in [CLion](https://www.jetbrains.com/clion/).
 
 ```
 //region STRUCTURES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
