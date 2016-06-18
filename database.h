@@ -18,15 +18,20 @@ struct DB_Record {
     char *message;
 };
 
+/*
+ * Defines a function that inserts json into the database
+ */
+typedef struct DB_Record* (*DB_insertFunction) (const char *pJson, mongoc_client_t *pClient);
+
 /**
- * Inserts a gps log record when the record is valid.
+ * Inserts a gps log record when the record is valid
  *
  * returns struct DB_Record which you must later DB_deleteRecord()
  */
 struct DB_Record *DB_insertGpsLogRecord(const char *pJson, mongoc_client_t *pClient);
 
 /**
- * Inserts a fence record when the record is valid.
+ * Inserts a fence record when the record is valid
  *
  * returns struct DB_Record which you must later DB_deleteRecord()
  */
@@ -40,15 +45,8 @@ struct DB_Record *DB_insertFenceRecord(const char *pJson, mongoc_client_t *pClie
 struct DB_Record *DB_getFenceRecord(const char *pIdentifier, mongoc_client_t *pClient);
 
 /**
- * Deallocate a record that has been retrieved.
+ * Deallocate a record that has been retrieved
  */
 void DB_deleteRecord(struct DB_Record *pRecord);
-
-/**
- * Inserts a gps_log record when the record is valid.
- *
- * returns json string of inserted record which you must free()
- */
-//char* DB_insertGpsLogRecord(const char* pJson, mongoc_client_t *pClient);
 
 #endif //GEOFENCEBEC_DATABASE_H

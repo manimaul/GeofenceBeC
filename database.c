@@ -2,12 +2,24 @@
 // Created by William Kamp on 6/15/16.
 //
 
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #include "database.h"
 
 //region STRUCTURES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //endregion
 
 //region PRIVATE INTERFACE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+typedef json_t * (*_insertFunction) (const char *pJson);
+
+/**
+ * Insert a record into the database
+ *
+ * param pJson - the json post body
+ */
+struct DB_Record *_insertRecord(const char *pJson, mongoc_client_t *pClient, const char* pCollection,
+                                _insertFunction fPtr);
 
 /**
  * Create a DB_Record structure that must be freed with void DB_deleteRecord(struct DB_Record* pResult)
@@ -36,6 +48,37 @@ char *_createMessage(char const *const msg);
 //endregion
 
 //region PRIVATE FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+struct DB_Record *_insertRecord(const char *pJson, mongoc_client_t *pClient, const char* pCollection,
+                                _insertFunction fPtr) {
+    struct DB_Record *retVal = createRecord();
+    json_t *record = fPtr(pJson);
+    if (record) {
+        mongoc_collection_t *collection;
+        bson_error_t bsonError;
+        bson_t *doc;
+        collection = mongoc_client_get_collection(pClient, DB, pCollection);
+        char *insertJson = json_dumps(record, JSON_COMPACT);
+        doc = bson_new_from_json((const uint8_t *) insertJson, -1, &bsonError);
+        free(insertJson);
+        if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, doc, NULL, &bsonError)) {
+            retVal->message = malloc(strlen(bsonError.message));
+            strcpy(retVal->message, bsonError.message);
+            retVal->record = NULL;
+        } else {
+            char *value = bson_as_json(doc, NULL);
+            json_error_t error;
+            retVal->record = json_loads(value, strlen(value), &error);
+            retVal->message = _createMessage("ok");
+            bson_free(value);
+        }
+        bson_destroy(doc);
+        mongoc_collection_destroy(collection);
+    } else {
+        retVal->message = _createMessage("validation error");
+    }
+    return retVal;
+}
 
 //void mongoUpsert() {
 //    mongoc_collection_t *collection;
@@ -84,6 +127,12 @@ char *_createMessage(char const *const msg);
 json_t *_validateGpsLogRecord(const char *pJson) {
     json_error_t error;
     json_t *json = json_loads(pJson, strlen(pJson), &error);
+    double minLatitude = 90.0;
+    double maxLatitude = -90.0;
+    double minLongitude = 180.0;
+    double maxLongitude = -180.0;
+    json_int_t startTime = 0;
+    json_int_t endTime = 0;
     bool result = true;
     if (json != NULL) {
         json_t *obj = json_object_get(json, "log");
@@ -103,12 +152,48 @@ json_t *_validateGpsLogRecord(const char *pJson) {
                     result = false;
                     goto resultBlock;
                 }
+                double longitude = json_number_value(value);
+                if (index == 0) {
+                    minLongitude = longitude;
+                    maxLongitude = longitude;
+                } else {
+                    minLongitude = MIN(minLongitude, longitude);
+                    maxLongitude = MAX(maxLongitude, longitude);
+                }
                 value = json_object_get(logObj, "time");
                 if (!json_is_number(value)) {
                     result = false;
                     goto resultBlock;
                 }
+                double latitude = json_number_value(value);
+                if (index == 0) {
+                    minLatitude= latitude;
+                    maxLatitude= latitude;
+                } else {
+                    minLatitude= MIN(minLatitude, latitude);
+                    maxLatitude= MAX(maxLatitude, latitude);
+                }
+                long t = (long) json_number_value(value);
+                if (index == 0) {
+                    startTime = t;
+                    endTime = t;
+                } else {
+                    startTime = MIN(startTime, t);
+                    endTime = MAX(endTime, t);
+                }
             }
+
+            json_t *box = json_object();
+            json_object_set_new(box, "min_latitude", json_real(minLatitude));
+            json_object_set_new(box, "max_latitude", json_real(maxLatitude));
+            json_object_set_new(box, "min_longitude", json_real(minLongitude));
+            json_object_set_new(box, "max_longitude", json_real(maxLongitude));
+            json_object_set_new(json, "bounding_box", box);
+
+            json_t *timeWindow = json_object();
+            json_object_set_new(timeWindow, "start_time", json_integer(startTime));
+            json_object_set_new(timeWindow, "end_time", json_integer(endTime));
+            json_object_set_new(json, "time_window", timeWindow);
         }
     }
 
@@ -162,59 +247,11 @@ json_t *_validateFenceRecord(const char *pJson) {
 //region PUBLIC FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 struct DB_Record *DB_insertGpsLogRecord(const char *pJson, mongoc_client_t *pClient) {
-    struct DB_Record *retVal = createRecord();
-    json_t *record = _validateGpsLogRecord(pJson);
-    if (record) {
-        mongoc_collection_t *collection;
-        bson_error_t bsonError;
-        bson_t *doc;
-        collection = mongoc_client_get_collection(pClient, DB, COLLECTION_GPS_LOGS);
-        doc = bson_new_from_json((const uint8_t *) pJson, -1, &bsonError);
-        if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, doc, NULL, &bsonError)) {
-            retVal->message = malloc(strlen(bsonError.message));
-            strcpy(retVal->message, bsonError.message);
-            retVal->record = NULL;
-        } else {
-            char *value = bson_as_json(doc, NULL);
-            json_error_t error;
-            retVal->record = json_loads(value, strlen(value), &error);
-            retVal->message = _createMessage("ok");
-            bson_free(value);
-        }
-        bson_destroy(doc);
-        mongoc_collection_destroy(collection);
-    } else {
-        retVal->message = _createMessage("validation error");
-    }
-    return retVal;
+    return _insertRecord(pJson, pClient, COLLECTION_GPS_LOGS, &_validateGpsLogRecord);
 }
 
 struct DB_Record *DB_insertFenceRecord(const char *pJson, mongoc_client_t *pClient) {
-    struct DB_Record *retVal = createRecord();
-    json_t *record = _validateFenceRecord(pJson);
-    if (record) {
-        mongoc_collection_t *collection;
-        bson_error_t bsonError;
-        bson_t *doc;
-        collection = mongoc_client_get_collection(pClient, DB, COLLECTION_FENCES);
-        doc = bson_new_from_json((const uint8_t *) pJson, -1, &bsonError);
-        if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, doc, NULL, &bsonError)) {
-            retVal->message = malloc(strlen(bsonError.message));
-            strcpy(retVal->message, bsonError.message);
-            retVal->record = NULL;
-        } else {
-            char *value = bson_as_json(doc, NULL);
-            json_error_t error;
-            retVal->record = json_loads(value, strlen(value), &error);
-            retVal->message = _createMessage("ok");
-            bson_free(value);
-        }
-        bson_destroy(doc);
-        mongoc_collection_destroy(collection);
-    } else {
-        retVal->message = _createMessage("validation error");
-    }
-    return retVal;
+    return _insertRecord(pJson, pClient, COLLECTION_FENCES, &_validateFenceRecord);
 }
 
 struct DB_Record *DB_getFenceRecord(const char *pIdentifier, mongoc_client_t *pClient) {

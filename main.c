@@ -45,7 +45,19 @@ int _answerConnection(void *pCls,
 int _handleRoot(struct MHD_Connection *pConn);
 
 /**
- * Request handler for /fence_entry endpoint
+ * Generic Request handler for requests where body is to be inserted into the database
+ *
+ * param pConn - the connection to enqueue a response to
+ * param pData - data to retrieve a MongoDb client from
+ * param pConnInfo - connection info to retrieve the request body
+ * param fPtr - function pointer to insert json record into database
+ */
+int _handlePostWithDbInsertBodyJson(struct MHD_Connection *pConn, struct MA_HandlerData *pData,
+                                    struct MA_ConnectionInfo *pConnInfo,
+                                    DB_insertFunction fPtr);
+
+/**
+ * Request handler for /fence_entry POST endpoint
  *
  * param pConn - the connection to enqueue a response to
  * param pData - data to retrieve a MongoDb client from
@@ -53,6 +65,22 @@ int _handleRoot(struct MHD_Connection *pConn);
  */
 int _handlePostFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, struct MA_ConnectionInfo *pConnInfo);
 
+/**
+ * Request handler for POST /gps_log endpoint
+ *
+ * param pConn - the connection to enqueue a response to
+ * param pData - data to retrieve a MongoDb client from
+ * param pConnInfo - connection info to retrieve the request body
+ */
+int _handlePostGpsLog(struct MHD_Connection *pConn, struct MA_HandlerData *pData, struct MA_ConnectionInfo *pConnInfo);
+
+/**
+ * Request handler for /gps_log endpoint
+ *
+ * param pConn - the connection to enqueue a response to
+ * param pData - data to retrieve a MongoDb client from
+ * param pConnInfo - connection info to retrieve the request body
+ */
 int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, const char *pId);
 
 /**
@@ -157,15 +185,22 @@ int _answerConnection(void *pCls,
         }
     }
 
-        /*
-         * Answer POST requests
-         */
+   /*
+    * Answer POST requests
+    */
     else if (0 == strcmp(pMethod, METHOD_POST)) {
         /*
          * Answer /fence_entry endpoint
          */
         if (0 == strcmp(pUrl, "/fence_entry")) {
             return _handlePostFenceEntry(pConn, pCls, connectionInfo);
+        }
+
+        /*
+         * Answer /fence_entry endpoint
+         */
+        if (0 == strcmp(pUrl, "/gps_log")) {
+            return _handlePostGpsLog(pConn, pCls, connectionInfo);
         }
     }
 
@@ -183,7 +218,7 @@ int _handleRoot(struct MHD_Connection *pConn) {
      * Craft json response
      */
     json_t *json_response = json_object();
-    json_object_set(json_response, "message", json_string("GeoFence Mark API"));
+    json_object_set_new(json_response, "message", json_string("GeoFence Mark API"));
     char *responseBody = json_dumps(json_response, JSON_COMPACT);
 
     /*
@@ -220,12 +255,12 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     json_t *json_response = json_object();
     unsigned int statusCode;
     if (record->record) {
-        json_object_set(json_response, "message", json_string(record->message));
-        json_object_set(json_response, "record", record->record);
+        json_object_set_new(json_response, "message", json_string(record->message));
+        json_object_set_new(json_response, "record", record->record);
         statusCode = MHD_HTTP_OK;
     } else {
-        json_object_set(json_response, "message", json_string("DB_Record not found"));
-        json_object_set(json_response, "record", record->record);
+        json_object_set_new(json_response, "message", json_string("DB_Record not found"));
+        json_object_set_new(json_response, "record", record->record);
         statusCode = MHD_HTTP_NOT_FOUND;
     }
     char *responseBody = json_dumps(json_response, JSON_COMPACT);
@@ -249,14 +284,16 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     return ret;
 }
 
-int _handlePostFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, struct MA_ConnectionInfo *pConnInfo) {
+int _handlePostWithDbInsertBodyJson(struct MHD_Connection *pConn, struct MA_HandlerData *pData,
+                                    struct MA_ConnectionInfo *pConnInfo,
+                                    DB_insertFunction fPtr) {
     /*
      * Insert the record in the db
      */
     mongoc_client_pool_t *pool = pData->pool;
     mongoc_client_t *client;
     client = mongoc_client_pool_pop(pool);
-    struct DB_Record *record = DB_insertFenceRecord(pConnInfo->body, client);
+    struct DB_Record *record = fPtr(pConnInfo->body, client);
     mongoc_client_pool_push(pool, client);
 
     /*
@@ -265,8 +302,8 @@ int _handlePostFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *p
     json_t *json_response = json_object();
     unsigned int statusCode = MHD_HTTP_BAD_REQUEST;
     if (record) {
-        json_object_set(json_response, "message", json_string(record->message));
-        json_object_set(json_response, "record", record->record);
+        json_object_set_new(json_response, "message", json_string(record->message));
+        json_object_set_new(json_response, "record", record->record);
         statusCode = MHD_HTTP_OK;
     }
     char *responseBody = json_dumps(json_response, JSON_COMPACT);
@@ -290,12 +327,21 @@ int _handlePostFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *p
     return ret;
 }
 
+int _handlePostGpsLog(struct MHD_Connection *pConn, struct MA_HandlerData *pData, struct MA_ConnectionInfo *pConnInfo) {
+    return _handlePostWithDbInsertBodyJson(pConn, pData, pConnInfo, &DB_insertGpsLogRecord);
+}
+
+int _handlePostFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData,
+                          struct MA_ConnectionInfo *pConnInfo) {
+    return _handlePostWithDbInsertBodyJson(pConn, pData, pConnInfo, &DB_insertFenceRecord);
+}
+
 int _handleNotFound(struct MHD_Connection *pConn) {
     /*
      * Craft json response
      */
     json_t *json_response = json_object();
-    json_object_set(json_response, "message", json_string("Not Found"));
+    json_object_set_new(json_response, "message", json_string("Not Found"));
     char *responseBody = json_dumps(json_response, JSON_COMPACT);
 
     /*
