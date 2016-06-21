@@ -83,6 +83,9 @@ int _handlePostGpsLog(struct MHD_Connection *pConn, struct MA_HandlerData *pData
  */
 int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, const char *pId);
 
+
+int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, long epoch);
+
 /**
  * Request handler for 404 - resource not found
  *
@@ -183,6 +186,18 @@ int _answerConnection(void *pCls,
                 return _handleGetFenceEntry(pConn, pCls, val);
             }
         }
+
+        /*
+         * Answer gps_log endpoint
+         */
+        if (0 == strcmp(pUrl, "/gps_log")) {
+            const char *val = MHD_lookup_connection_value(pConn, MHD_GET_ARGUMENT_KIND, "t");
+            if (val) {
+                char * pEnd;
+                long time = strtol(val, &pEnd, 10);
+                return _handleGetGpsLogEntry(pConn, pCls, time);
+            }
+        }
     }
 
    /*
@@ -247,6 +262,51 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     mongoc_client_t *client;
     client = mongoc_client_pool_pop(pool);
     struct DB_Record *record = DB_getFenceRecord(pId, client);
+    mongoc_client_pool_push(pool, client);
+
+    /*
+     * Craft json response
+     */
+    json_t *json_response = json_object();
+    unsigned int statusCode;
+    if (record->record) {
+        json_object_set_new(json_response, "message", json_string(record->message));
+        json_object_set_new(json_response, "record", record->record);
+        statusCode = MHD_HTTP_OK;
+    } else {
+        json_object_set_new(json_response, "message", json_string("DB_Record not found"));
+        json_object_set_new(json_response, "record", record->record);
+        statusCode = MHD_HTTP_NOT_FOUND;
+    }
+    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+
+    /*
+     * Queue a json response
+     */
+    struct MHD_Response *response;
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_PERSISTENT);
+    MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
+    int ret = MHD_queue_response(pConn, statusCode, response);
+
+    /**
+     * Cleanup
+     */
+    MHD_destroy_response(response);
+    DB_deleteRecord(record);
+    json_decref(json_response);
+    free(responseBody);
+
+    return ret;
+}
+
+int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, long epoch) {
+    /*
+     * Insert the record in the db
+     */
+    mongoc_client_pool_t *pool = pData->pool;
+    mongoc_client_t *client;
+    client = mongoc_client_pool_pop(pool);
+    struct DB_Record *record = DB_getGpsLogRecord(epoch, client);
     mongoc_client_pool_push(pool, client);
 
     /*

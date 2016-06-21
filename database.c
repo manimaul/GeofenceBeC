@@ -41,7 +41,7 @@ json_t *_validateFenceRecord(const char *pJson);
 json_t *_validateGpsLogRecord(const char *pJson);
 
 /**
- * Create a message that must bee freed with free()
+ * Create a message that must be freed with free()
  */
 char *_createMessage(char const *const msg);
 
@@ -267,13 +267,51 @@ struct DB_Record *DB_getFenceRecord(const char *pIdentifier, mongoc_client_t *pC
     BSON_APPEND_UTF8(query, "identifier", pIdentifier);
     cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 1, 0, query, NULL, NULL);
 
-    while (mongoc_cursor_next(cursor, &doc)) {
+    if (mongoc_cursor_next(cursor, &doc)) {
         json_error_t error;
         char *value = bson_as_json(doc, NULL);
         retVal->record = json_loads(value, strlen(value), &error);
         retVal->message = _createMessage("ok");
         bson_free(value);
-        break;
+    }
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+
+    return retVal;
+}
+
+struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) {
+    struct DB_Record *retVal = createRecord();
+
+    mongoc_collection_t *collection = mongoc_client_get_collection(pClient, DB, COLLECTION_GPS_LOGS);
+    mongoc_cursor_t *cursor;
+    const bson_t *doc;
+
+    /*
+     * Build the query
+     */
+    bson_t *query = bson_new();
+    bson_t queryChildEndTime;
+    bson_t queryChildStartTime;
+
+    BSON_APPEND_DOCUMENT_BEGIN(query, "time_window.end_time", &queryChildEndTime);
+    BSON_APPEND_INT64(&queryChildEndTime, "$gte", pEpochTime);
+    bson_append_document_end(query, &queryChildEndTime);
+
+    BSON_APPEND_DOCUMENT_BEGIN(query, "time_window.start_time", &queryChildStartTime);
+    BSON_APPEND_INT64(&queryChildStartTime, "$lte", pEpochTime);
+    bson_append_document_end(query, &queryChildStartTime);
+
+    cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 1, 0, query, NULL, NULL);
+
+    if (mongoc_cursor_next(cursor, &doc)) {
+        json_error_t error;
+        char *value = bson_as_json(doc, NULL);
+        retVal->record = json_loads(value, strlen(value), &error);
+        retVal->message = _createMessage("ok");
+        bson_free(value);
     }
 
     bson_destroy(query);
