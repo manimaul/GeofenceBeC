@@ -261,6 +261,17 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     mongoc_client_t *client;
     client = mongoc_client_pool_pop(pool);
     struct DB_Record *record = DB_getFenceRecord(pId, client);
+    struct DB_Record *logRecord = NULL;
+    if (record->record) { // Find corresponding log entry
+        json_t *entryTime = json_object_get(record->record, "entry_time");
+        if (json_is_number(entryTime)) {
+            double et = json_real_value(entryTime); //todo: fix loss of precision (jansson - json_loads)
+            logRecord = DB_getGpsLogRecord((long)et, client);
+            if (logRecord->record) {
+                json_object_set(record->record, "gps_log", logRecord->record);
+            }
+        }
+    }
     mongoc_client_pool_push(pool, client);
 
     /*
@@ -292,7 +303,7 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
      */
     MHD_destroy_response(response);
     DB_deleteRecord(record);
-    //DB_deleteRecord(logRecord);
+    DB_deleteRecord(logRecord);
     json_decref(json_response);
     free(responseBody);
 
