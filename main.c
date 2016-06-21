@@ -193,8 +193,7 @@ int _answerConnection(void *pCls,
         if (0 == strcmp(pUrl, "/gps_log")) {
             const char *val = MHD_lookup_connection_value(pConn, MHD_GET_ARGUMENT_KIND, "t");
             if (val) {
-                char * pEnd;
-                long time = strtol(val, &pEnd, 10);
+                long time = strtol(val, NULL, 10);
                 return _handleGetGpsLogEntry(pConn, pCls, time);
             }
         }
@@ -271,11 +270,11 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     unsigned int statusCode;
     if (record->record) {
         json_object_set_new(json_response, "message", json_string(record->message));
-        json_object_set_new(json_response, "record", record->record);
+        json_object_set(json_response, "record", record->record); // not set_new because we free in cleanup
         statusCode = MHD_HTTP_OK;
     } else {
         json_object_set_new(json_response, "message", json_string("DB_Record not found"));
-        json_object_set_new(json_response, "record", record->record);
+        json_object_set(json_response, "record", NULL);
         statusCode = MHD_HTTP_NOT_FOUND;
     }
     char *responseBody = json_dumps(json_response, JSON_COMPACT);
@@ -316,11 +315,11 @@ int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *p
     unsigned int statusCode;
     if (record->record) {
         json_object_set_new(json_response, "message", json_string(record->message));
-        json_object_set_new(json_response, "record", record->record);
+        json_object_set(json_response, "record", record->record); // not set_new because we free in cleanup
         statusCode = MHD_HTTP_OK;
     } else {
         json_object_set_new(json_response, "message", json_string("DB_Record not found"));
-        json_object_set_new(json_response, "record", record->record);
+        json_object_set(json_response, "record", NULL);
         statusCode = MHD_HTTP_NOT_FOUND;
     }
     char *responseBody = json_dumps(json_response, JSON_COMPACT);
@@ -363,7 +362,7 @@ int _handlePostWithDbInsertBodyJson(struct MHD_Connection *pConn, struct MA_Hand
     unsigned int statusCode = MHD_HTTP_BAD_REQUEST;
     if (record) {
         json_object_set_new(json_response, "message", json_string(record->message));
-        json_object_set_new(json_response, "record", record->record);
+        json_object_set(json_response, "record", record->record); // not set_new because we free in cleanup
         statusCode = MHD_HTTP_OK;
     }
     char *responseBody = json_dumps(json_response, JSON_COMPACT);
