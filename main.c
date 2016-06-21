@@ -26,14 +26,14 @@ struct MA_ConnectionInfo {
 //region PRIVATE INTERFACE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /**
- * The handler function for all http requests that conforms to the MHD_AccessHandlerCallback protocol in microhttpd.h
+ * The handler function for all http requests that conform to the MHD_AccessHandlerCallback protocol in microhttpd.h
  */
 int _answerConnection(void *pCls,
                       struct MHD_Connection *pConn,
-                      const char *pUrl,
-                      const char *pMethod,
-                      const char *version,
-                      const char *upload_data,
+                      char const *pUrl,
+                      char const *pMethod,
+                      char const *version,
+                      char const *upload_data,
                       size_t *upload_data_size,
                       void **con_cls);
 
@@ -81,7 +81,7 @@ int _handlePostGpsLog(struct MHD_Connection *pConn, struct MA_HandlerData *pData
  * param pData - data to retrieve a MongoDb client from
  * param pConnInfo - connection info to retrieve the request body
  */
-int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, const char *pId);
+int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, char const *pId);
 
 
 int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, long epoch);
@@ -139,10 +139,10 @@ static void __requestCompleted(void *pCls, struct MHD_Connection *pConn, void **
 
 int _answerConnection(void *pCls,
                       struct MHD_Connection *pConn,
-                      const char *pUrl,
-                      const char *pMethod,
-                      const char *pVersion,
-                      const char *pUploadData,
+                      char const *pUrl,
+                      char const *pMethod,
+                      char const *pVersion,
+                      char const *pUploadData,
                       size_t *pUploadDataSize,
                       void **pConnCls) {
 
@@ -181,7 +181,7 @@ int _answerConnection(void *pCls,
          * Answer /fence_entry endpoint
          */
         if (0 == strcmp(pUrl, "/fence_entry")) {
-            const char *val = MHD_lookup_connection_value(pConn, MHD_GET_ARGUMENT_KIND, "i");
+            char const *val = MHD_lookup_connection_value(pConn, MHD_GET_ARGUMENT_KIND, "i");
             if (val) {
                 return _handleGetFenceEntry(pConn, pCls, val);
             }
@@ -191,7 +191,7 @@ int _answerConnection(void *pCls,
          * Answer gps_log endpoint
          */
         if (0 == strcmp(pUrl, "/gps_log")) {
-            const char *val = MHD_lookup_connection_value(pConn, MHD_GET_ARGUMENT_KIND, "t");
+            char const *val = MHD_lookup_connection_value(pConn, MHD_GET_ARGUMENT_KIND, "t");
             if (val) {
                 long time = strtol(val, NULL, 10);
                 return _handleGetGpsLogEntry(pConn, pCls, time);
@@ -253,9 +253,9 @@ int _handleRoot(struct MHD_Connection *pConn) {
     return ret;
 }
 
-int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, const char *pId) {
+int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, char const *pId) {
     /*
-     * Insert the record in the db
+     * Fetch the record from the database
      */
     mongoc_client_pool_t *pool = pData->pool;
     mongoc_client_t *client;
@@ -292,6 +292,7 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
      */
     MHD_destroy_response(response);
     DB_deleteRecord(record);
+    //DB_deleteRecord(logRecord);
     json_decref(json_response);
     free(responseBody);
 
@@ -300,7 +301,7 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
 
 int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, long epoch) {
     /*
-     * Insert the record in the db
+     * Fetch the record from the database
      */
     mongoc_client_pool_t *pool = pData->pool;
     mongoc_client_t *client;

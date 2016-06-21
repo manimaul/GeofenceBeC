@@ -2,8 +2,6 @@
 // Created by William Kamp on 6/15/16.
 //
 
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #include "database.h"
 
 //region STRUCTURES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -11,14 +9,14 @@
 
 //region PRIVATE INTERFACE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-typedef json_t * (*_insertFunction) (const char *pJson);
+typedef json_t * (*_insertFunction) (char const *pJson);
 
 /**
  * Insert a record into the database
  *
  * param pJson - the json post body
  */
-struct DB_Record *_insertRecord(const char *pJson, mongoc_client_t *pClient, const char* pCollection,
+struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, char const* pCollection,
                                 _insertFunction fPtr);
 
 /**
@@ -31,14 +29,14 @@ struct DB_Record *createRecord();
  *
  * returns a json_t object when valid NULL otherwise
  */
-json_t *_validateFenceRecord(const char *pJson);
+json_t *_validateFenceRecord(char const *pJson);
 
 /**
  * Validate a json string as a valid gps_log
  *
  * returns a json_t object when valid NULL otherwise
  */
-json_t *_validateGpsLogRecord(const char *pJson);
+json_t *_validateGpsLogRecord(char const *pJson);
 
 /**
  * Create a message that must be freed with free()
@@ -49,7 +47,7 @@ char *_createMessage(char const *const msg);
 
 //region PRIVATE FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-struct DB_Record *_insertRecord(const char *pJson, mongoc_client_t *pClient, const char* pCollection,
+struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, char const* pCollection,
                                 _insertFunction fPtr) {
     struct DB_Record *retVal = createRecord();
     json_t *record = fPtr(pJson);
@@ -59,7 +57,7 @@ struct DB_Record *_insertRecord(const char *pJson, mongoc_client_t *pClient, con
         bson_t *doc;
         collection = mongoc_client_get_collection(pClient, DB, pCollection);
         char *insertJson = json_dumps(record, JSON_COMPACT);
-        doc = bson_new_from_json((const uint8_t *) insertJson, -1, &bsonError);
+        doc = bson_new_from_json((uint8_t const *) insertJson, -1, &bsonError);
         free(insertJson);
         if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, doc, NULL, &bsonError)) {
             retVal->message = malloc(strlen(bsonError.message));
@@ -124,7 +122,7 @@ struct DB_Record *_insertRecord(const char *pJson, mongoc_client_t *pClient, con
 //    mongoc_client_destroy(client);
 //}
 
-json_t *_validateGpsLogRecord(const char *pJson) {
+json_t *_validateGpsLogRecord(char const *pJson) {
     json_error_t error;
     json_t *json = json_loads(pJson, strlen(pJson), &error);
     double minLatitude = 90.0;
@@ -208,7 +206,7 @@ json_t *_validateGpsLogRecord(const char *pJson) {
     }
 }
 
-json_t *_validateFenceRecord(const char *pJson) {
+json_t *_validateFenceRecord(char const *pJson) {
     json_error_t error;
     json_t *json = json_loads(pJson, strlen(pJson), &error);
     bool result = true;
@@ -246,20 +244,20 @@ json_t *_validateFenceRecord(const char *pJson) {
 
 //region PUBLIC FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-struct DB_Record *DB_insertGpsLogRecord(const char *pJson, mongoc_client_t *pClient) {
+struct DB_Record *DB_insertGpsLogRecord(char const *pJson, mongoc_client_t *pClient) {
     return _insertRecord(pJson, pClient, COLLECTION_GPS_LOGS, &_validateGpsLogRecord);
 }
 
-struct DB_Record *DB_insertFenceRecord(const char *pJson, mongoc_client_t *pClient) {
+struct DB_Record *DB_insertFenceRecord(char const *pJson, mongoc_client_t *pClient) {
     return _insertRecord(pJson, pClient, COLLECTION_FENCES, &_validateFenceRecord);
 }
 
-struct DB_Record *DB_getFenceRecord(const char *pIdentifier, mongoc_client_t *pClient) {
+struct DB_Record *DB_getFenceRecord(char const *pIdentifier, mongoc_client_t *pClient) {
     struct DB_Record *retVal = createRecord();
 
     mongoc_collection_t *collection;
     mongoc_cursor_t *cursor;
-    const bson_t *doc;
+    bson_t const *doc;
     bson_t *query;
 
     collection = mongoc_client_get_collection(pClient, DB, COLLECTION_FENCES);
@@ -287,7 +285,7 @@ struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) 
 
     mongoc_collection_t *collection = mongoc_client_get_collection(pClient, DB, COLLECTION_GPS_LOGS);
     mongoc_cursor_t *cursor;
-    const bson_t *doc;
+    bson_t const *doc;
 
     /*
      * Build the query
@@ -321,7 +319,7 @@ struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) 
     return retVal;
 }
 
-char *_createMessage(char const *const pMsg) {
+char *_createMessage(char const * const pMsg) {
     char *retVal = malloc(sizeof(char) * strlen(pMsg));
     strcpy(retVal, pMsg);
     return retVal;
