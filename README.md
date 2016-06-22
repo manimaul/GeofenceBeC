@@ -6,21 +6,39 @@
 
 * CMake<br/>
 https://cmake.org/<br/>
-`brew install cmake`
+OSX: `brew install cmake`<br>
+Ubuntu / Linux: `sudo apt-get install cmake build-essential`<br/>
+
+* Clang (optional)<br/>
+http://clang.llvm.org/<br/>
+Ubuntu / Linux: `clang-3.8 clang`<br/>
+`sudo update-alternatives --config c++` <choose clang>
 
 * MongoDb C Driver<br/>
 https://github.com/mongodb/mongo-c-driver
 http://api.mongodb.com/c/current/<br/>
-`brew install mongo-c`
+OSX: `brew install mongo-c`<br>
+Ubuntu / Linux: `sudo apt-get install libmongoc-dev libbson-dev`
 
 * Jansson<br/>
 http://www.digip.org/jansson/
 https://jansson.readthedocs.io/en/2.7/apiref.html<br/>
-`brew install jansson`
+OSX: `brew install jansson`<br>
+Ubuntu / Linux: `sudo apt-get install libjansson-dev`
 
 * Libmicrohttpd<br/>
 https://www.gnu.org/software/libmicrohttpd/<br/>
-`brew install microhttpd`
+OSX: `brew install microhttpd`<br>
+Ubuntu / Linux: `sudo apt-get install libmicrohttpd-dev`
+
+Ubuntu / Linux:
+`sudo apt-get install cmake build-essential clang-3.8 clang libmongoc-dev libbson-dev libmicrohttpd-dev `<br/>
+
+####Build
+
+`cmake .`<br/>
+`make`
+
 
 ##Conventions
 
