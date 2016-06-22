@@ -240,7 +240,7 @@ int _handleRoot(struct MHD_Connection *pConn) {
      * Queue a json response
      */
     struct MHD_Response *response;
-    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_PERSISTENT);
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_MUST_COPY);
     MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
     int ret = MHD_queue_response(pConn, MHD_HTTP_OK, response);
 
@@ -318,7 +318,7 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
      * Queue a json response
      */
     struct MHD_Response *response;
-    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_PERSISTENT);
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_MUST_COPY);
     MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
     int ret = MHD_queue_response(pConn, statusCode, response);
 
@@ -364,7 +364,7 @@ int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *p
      * Queue a json response
      */
     struct MHD_Response *response;
-    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_PERSISTENT);
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_MUST_COPY);
     MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
     int ret = MHD_queue_response(pConn, statusCode, response);
 
@@ -407,7 +407,7 @@ int _handlePostWithDbInsertBodyJson(struct MHD_Connection *pConn, struct MA_Hand
      * Queue a json response
      */
     struct MHD_Response *response;
-    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_PERSISTENT);
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_MUST_COPY);
     MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
     int ret = MHD_queue_response(pConn, statusCode, response);
 
@@ -443,7 +443,7 @@ int _handleNotFound(struct MHD_Connection *pConn) {
      * Queue a json response
      */
     struct MHD_Response *response;
-    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_PERSISTENT);
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_MUST_COPY);
     MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
     int ret = MHD_queue_response(pConn, MHD_HTTP_NOT_FOUND, response);
 
