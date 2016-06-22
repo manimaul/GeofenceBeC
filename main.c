@@ -3,6 +3,7 @@
 #include <string.h>
 #include <libmongoc-1.0/mongoc.h>
 #include "database.h"
+#include "location.h"
 
 #define PORT 8080
 //#define TEXT_HTML "text/html"
@@ -262,13 +263,32 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     client = mongoc_client_pool_pop(pool);
     struct DB_Record *record = DB_getFenceRecord(pId, client);
     struct DB_Record *logRecord = NULL;
+    json_t *actualEntryPoint = NULL;
     if (record->record) { // Find corresponding log entry
         json_t *entryTime = json_object_get(record->record, "entry_time");
         if (json_is_number(entryTime)) {
-            double et = json_real_value(entryTime); //todo: fix loss of precision (jansson - json_loads)
-            logRecord = DB_getGpsLogRecord((long)et, client);
-            if (logRecord->record) {
-                json_object_set(record->record, "gps_log", logRecord->record);
+            long et = (long) json_real_value(entryTime); //todo: fix loss of precision (jansson - json_loads)
+            logRecord = DB_getGpsLogRecord(et, client);
+            struct LocationInfo locationInfo;
+            double fenceLat = json_real_value(json_object_get(record->record, "latitude"));
+            double fenceLng = json_real_value(json_object_get(record->record, "longitude"));
+            double radius = json_real_value(json_object_get(record->record, "radius"));
+
+            size_t index;
+            json_t *logObj;
+            json_array_foreach(json_object_get(logRecord->record, "log"), index, logObj) {
+                double ptLat = json_real_value(json_object_get(logObj, "latitude"));
+                double ptLng = json_real_value(json_object_get(logObj, "longitude"));
+                LOC_calculateLocationInfo(&locationInfo, fenceLat, fenceLng, ptLat, ptLng);
+                json_object_set_new(logObj, "distance", json_real(locationInfo.distanceMeters));
+                if (locationInfo.distanceMeters <= radius) {
+                    json_int_t actualEntryTime = json_integer_value(json_object_get(logObj, "time"));
+                    json_int_t entryTimeDelta = et - actualEntryTime;
+                    json_object_set_new(actualEntryPoint, "entry_delta", json_integer(entryTimeDelta));
+                    if (actualEntryPoint == NULL) {
+                        actualEntryPoint = logObj;
+                    }
+                }
             }
         }
     }
@@ -282,6 +302,10 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     if (record->record) {
         json_object_set_new(json_response, "message", json_string(record->message));
         json_object_set(json_response, "record", record->record); // not set_new because we free in cleanup
+        if (logRecord != NULL) {
+            json_object_set(json_response, "corresponding_log", logRecord->record);
+            json_object_set(json_response, "actual_entry", actualEntryPoint);
+        }
         statusCode = MHD_HTTP_OK;
     } else {
         json_object_set_new(json_response, "message", json_string("DB_Record not found"));
