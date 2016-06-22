@@ -232,9 +232,9 @@ int _handleRoot(struct MHD_Connection *pConn) {
     /*
      * Craft json response
      */
-    json_t *json_response = json_object();
-    json_object_set_new(json_response, "message", json_string("GeoFence Mark API"));
-    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+    bson_t *json_response = bson_new();
+    BSON_APPEND_UTF8(json_response, "message", "GeoFence Mark API");
+    char *responseBody = bson_as_json(json_response, NULL);
 
     /*
      * Queue a json response
@@ -248,8 +248,8 @@ int _handleRoot(struct MHD_Connection *pConn) {
      * Cleanup
      */
     MHD_destroy_response(response);
-    json_decref(json_response);
-    free(responseBody);
+    bson_destroy(json_response);
+    bson_free(responseBody);
 
     return ret;
 }
