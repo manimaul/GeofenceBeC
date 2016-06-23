@@ -40,8 +40,12 @@ Shell
 Start shell with command ```mongo```
 Exit shell with command ```quit()```
 
-use prod
-db.users.find({})
+show dbs
+use geofence 
+show collections
+db.geofence.find({})
+db.fences.remove({_id:ObjectId("5769e47bc3d5a2339819e911")})
+
 db.users.update({"user_name" : "wkamp"},{$set: {"hash": "SzudL+cYLrREGAvNVwZJdRX7OhP0BdhfVFpyc9ic+Nk="}})
 db.users.update({"user_name" : "user"},{$set: {"organization": "Example"}})
 
@@ -49,5 +53,4 @@ db.getCollection('lessons').find({"html_content": {$regex : ".*Search Term*"}})
 db.getCollection('lessons').find({"html_content": {$regex : "Search Term"}})
 
 db.fs.files.find({},{filename:1})
-db.fs.files.find({_id:ObjectId("56131b73d4c6fe08421b9f3b")})
 db.fs.files.remove({_id:ObjectId("56131b73d4c6fe08421b9f3b")})

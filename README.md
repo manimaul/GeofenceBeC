@@ -11,7 +11,7 @@ Ubuntu / Linux: `sudo apt-get install cmake build-essential`<br/>
 
 * Clang (optional)<br/>
 http://clang.llvm.org/<br/>
-Ubuntu / Linux: `clang-3.8 clang`<br/>
+Ubuntu / Linux: `sudo apt-get install clang`<br/>
 `sudo update-alternatives --config c++` <choose clang>
 
 * MongoDb C Driver<br/>

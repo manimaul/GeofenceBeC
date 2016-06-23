@@ -94,6 +94,8 @@ int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *p
  */
 int _handleNotFound(struct MHD_Connection *pConn);
 
+int _handleError(struct MHD_Connection *pConn);
+
 //endregion
 
 //region STATIC FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -158,6 +160,7 @@ int _answerConnection(void *pCls,
     }
     if (*pUploadDataSize) {
         size_t len = *pUploadDataSize;
+        printf("_answerConnection upload size:%lu\n", len);
         if (len > 0) {
             if (connectionInfo->body == NULL) {
                 char *body = malloc(len);
@@ -167,7 +170,11 @@ int _answerConnection(void *pCls,
                 size_t sz = strlen(connectionInfo->body);
                 char temp[sz];
                 strcpy(temp, connectionInfo->body);
+                printf("_answerConnection TOTAL body size:%lu\n", sz + len);
                 connectionInfo->body = realloc(connectionInfo->body, sz + len);
+                if (!connectionInfo->body) {
+                    return _handleError(pConn);
+                }
                 strcpy(connectionInfo->body, temp);
                 strcat(connectionInfo->body, pUploadData);
             }
@@ -440,6 +447,33 @@ int _handlePostFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *p
     return _handlePostWithDbInsertBodyJson(pConn, pData, pConnInfo, &DB_insertFenceRecord);
 }
 
+int _handleError(struct MHD_Connection *pConn) {
+    /*
+     * Craft json response
+     */
+    json_t *json_response = json_object();
+    json_object_set_new(json_response, "message", json_string("Error"));
+    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+
+    /*
+     * Queue a json response
+     */
+    struct MHD_Response *response;
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_MUST_COPY);
+    MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
+    int ret = MHD_queue_response(pConn, MHD_HTTP_INTERNAL_SERVER_ERROR, response);
+
+    /*
+     * Cleanup
+     */
+    MHD_destroy_response(response);
+    json_decref(json_response);
+    free(responseBody);
+
+    return ret;
+}
+
+
 int _handleNotFound(struct MHD_Connection *pConn) {
     /*
      * Craft json response
@@ -502,7 +536,7 @@ int main() {
      * Wait for the 'q' key if the daemon was started
      */
     if (NULL != daemon) {
-        printf("GeoFence Http daemon running - press 'q' to quit.");
+        printf("GeoFence Http daemon running - press 'q' to quit.\n");
         waitChar:
         {
             int c = getchar();
