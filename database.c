@@ -58,6 +58,7 @@ struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, cha
         collection = mongoc_client_get_collection(pClient, DB, pCollection);
         char *insertJson = json_dumps(record, JSON_COMPACT);
         doc = bson_new_from_json((uint8_t const *) insertJson, -1, &bsonError);
+        printf("_insertRecord() free(insertJson)\n");
         free(insertJson);
         if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, doc, NULL, &bsonError)) {
             retVal->message = malloc(strlen(bsonError.message));
@@ -68,6 +69,7 @@ struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, cha
             json_error_t error;
             retVal->record = json_loads(value, strlen(value), &error);
             retVal->message = _createMessage("ok");
+            printf("_insertRecord() bson_free(value)\n");
             bson_free(value);
         }
         bson_destroy(doc);
@@ -77,50 +79,6 @@ struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, cha
     }
     return retVal;
 }
-
-//void mongoUpsert() {
-//    mongoc_collection_t *collection;
-//    mongoc_client_t *client;
-//    bson_error_t error;
-//    bson_oid_t oid;
-//    bson_t *doc = NULL;
-//    bson_t *update = NULL;
-//    bson_t *query = NULL;
-//
-//    client = mongoc_client_new("mongodb://localhost:27017/");
-//    collection = mongoc_client_get_collection(client, "mydb", "mycoll");
-//
-//    bson_oid_init(&oid, NULL);
-//    doc = BCON_NEW("_id", BCON_OID(&oid),
-//                   "key", BCON_UTF8("old_value"));
-//
-//    if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, doc, NULL, &error)) {
-//        fprintf(stderr, "%s\n", error.message);
-//        goto fail;
-//    }
-//
-//    query = BCON_NEW("_id", BCON_OID(&oid));
-//    update = BCON_NEW("$set", "{",
-//                      "key", BCON_UTF8("new_value"),
-//                      "updated", BCON_BOOL(true),
-//                      "}");
-//
-//    if (!mongoc_collection_update(collection, MONGOC_UPDATE_NONE, query, update, NULL, &error)) {
-//        fprintf(stderr, "%s\n", error.message);
-//        goto fail;
-//    }
-//
-//    fail:
-//    if (doc)
-//        bson_destroy(doc);
-//    if (query)
-//        bson_destroy(query);
-//    if (update)
-//        bson_destroy(update);
-//
-//    mongoc_collection_destroy(collection);
-//    mongoc_client_destroy(client);
-//}
 
 json_t *_validateGpsLogRecord(char const *pJson) {
     json_error_t error;
@@ -200,6 +158,7 @@ json_t *_validateGpsLogRecord(char const *pJson) {
         if (result) {
             return json;
         } else {
+            printf("_validateGpsLogRecord() json_decref(json)\n");
             json_decref(json);
             return NULL;
         }
@@ -235,6 +194,7 @@ json_t *_validateFenceRecord(char const *pJson) {
     if (result) {
         return json;
     } else {
+        printf("_validateFenceRecord() json_decref(json)\n");
         json_decref(json);
         return NULL;
     }
@@ -270,6 +230,7 @@ struct DB_Record *DB_getFenceRecord(char const *pIdentifier, mongoc_client_t *pC
         char *value = bson_as_json(doc, NULL);
         retVal->record = json_loads(value, strlen(value), &error);
         retVal->message = _createMessage("ok");
+        printf("DB_getFenceRecord() bson_free(value)\n");
         bson_free(value);
     }
 
@@ -309,6 +270,7 @@ struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) 
         char *value = bson_as_json(doc, NULL);
         retVal->record = json_loads(value, strlen(value), &error);
         retVal->message = _createMessage("ok");
+        printf("DB_getGpsLogRecord() bson_free(value)\n");
         bson_free(value);
     }
 
@@ -320,7 +282,7 @@ struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) 
 }
 
 char *_createMessage(char const * const pMsg) {
-    char *retVal = malloc(sizeof(char) * strlen(pMsg));
+    char *retVal = malloc(strlen(pMsg));
     strcpy(retVal, pMsg);
     return retVal;
 }
@@ -335,11 +297,14 @@ struct DB_Record *createRecord() {
 void DB_deleteRecord(struct DB_Record *pResult) {
     if (NULL != pResult) {
         if (NULL != pResult->record) {
+            printf("DB_deleteRecord() json_decref(DB_Record->record)\n");
             json_decref(pResult->record);
         }
         if (NULL != pResult->message) {
+            printf("DB_deleteRecord() free(DB_Record->message)\n");
             free(pResult->message);
         }
+        printf("DB_deleteRecord() free(DB_Record)\n");
         free(pResult);
     }
 }
