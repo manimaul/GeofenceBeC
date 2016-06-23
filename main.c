@@ -159,9 +159,18 @@ int _answerConnection(void *pCls,
     if (*pUploadDataSize) {
         size_t len = *pUploadDataSize;
         if (len > 0) {
-            char *body = malloc(len);
-            strcpy(body, pUploadData);
-            connectionInfo->body = body;
+            if (connectionInfo->body == NULL) {
+                char *body = malloc(len);
+                strcpy(body, pUploadData);
+                connectionInfo->body = body;
+            } else {
+                size_t sz = strlen(connectionInfo->body);
+                char temp[sz];
+                strcpy(temp, connectionInfo->body);
+                connectionInfo->body = realloc(connectionInfo->body, sz + len);
+                strcpy(connectionInfo->body, temp);
+                strcat(connectionInfo->body, pUploadData);
+            }
         }
         *pUploadDataSize = 0;
         return MHD_YES;
