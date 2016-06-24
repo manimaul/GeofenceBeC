@@ -139,6 +139,35 @@ static void __requestCompleted(void *pCls, struct MHD_Connection *pConn, void **
 
 //region PRIVATE FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+int _appendData(struct MHD_Connection *pConn, size_t *pUploadDataSize, char const *pUploadData,
+                struct MA_ConnectionInfo *connectionInfo) {
+
+    size_t len = *pUploadDataSize;
+    *pUploadDataSize = 0;
+    printf("_answerConnection upload size:%lu\n", len);
+
+    if (connectionInfo->body == NULL) {
+        printf("_answerConnection INITIAL body size:%lu\n", len);
+        char *body = malloc(len);
+        strcpy(body, pUploadData);
+        connectionInfo->body = body;
+    } else {
+        size_t sz = strlen(connectionInfo->body);
+        printf("_answerConnection CHUNK size:%lu\n", len);
+        printf("_answerConnection CHUNK_STR_LEN size:%lu\n", strlen(pUploadData));
+        printf("_answerConnection TOTAL body size:%lu\n", sz + len);
+        char *temp = realloc(connectionInfo->body, sz + len);
+        if (temp != NULL) {
+            strcat(temp, pUploadData);
+            connectionInfo->body = temp;
+        } else {
+            return _handleError(pConn);
+        }
+    }
+    return MHD_YES;
+
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
 
@@ -161,28 +190,7 @@ int _answerConnection(void *pCls,
         return MHD_YES;
     }
     if (*pUploadDataSize) {
-        size_t len = *pUploadDataSize;
-        printf("_answerConnection upload size:%lu\n", len);
-        if (len > 0) {
-            if (connectionInfo->body == NULL) {
-                char *body = malloc(len);
-                strcpy(body, pUploadData);
-                connectionInfo->body = body;
-            } else {
-                size_t sz = strlen(connectionInfo->body) + 1;
-                char temp[sz];
-                strcpy(temp, connectionInfo->body);
-                printf("_answerConnection TOTAL body size:%lu\n", sz + len);
-                connectionInfo->body = realloc(connectionInfo->body, sz + len + 1);
-                if (!connectionInfo->body) {
-                    return _handleError(pConn);
-                }
-                strcpy(connectionInfo->body, temp);
-                strcat(connectionInfo->body, pUploadData);
-            }
-        }
-        *pUploadDataSize = 0;
-        return MHD_YES;
+        return _appendData(pConn, pUploadDataSize, pUploadData, connectionInfo);
     }
 
     /*
