@@ -158,6 +158,7 @@ int _appendData(struct MHD_Connection *pConn, size_t *pUploadDataSize, char cons
         printf("_answerConnection TOTAL body size:%lu\n", sz + len);
         char *temp = realloc(connectionInfo->body, sz + len);
         if (temp != NULL) {
+            printf("_answerConnection copying upload data chunk");
             strcat(temp, pUploadData);
             connectionInfo->body = temp;
         } else {
