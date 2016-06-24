@@ -145,6 +145,11 @@ int _appendData(struct MHD_Connection *pConn, size_t *pUploadDataSize, char cons
     size_t len = *pUploadDataSize;
     *pUploadDataSize = 0;
     printf("_answerConnection upload size:%lu\n", len);
+    size_t actualLen = strlen(pUploadData);
+    if (actualLen != len) {
+        printf("_answerConnection WARNING size mismatch reported size_t:%lu : actual size_t:%lu", len, actualLen);
+        len = actualLen;
+    }
 
     if (connectionInfo->body == NULL) {
         printf("_answerConnection INITIAL body size:%lu\n", len);
