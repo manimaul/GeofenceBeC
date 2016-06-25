@@ -11,6 +11,7 @@
 #define CONTENT_TYPE "Content-type"
 #define METHOD_GET "GET"
 #define METHOD_POST "POST"
+#define METHOD_DELETE "DELETE"
 
 //region STRUCTURES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -110,6 +111,10 @@ int _handleGetGpsLogEntryList(struct MHD_Connection *pConn, struct MA_HandlerDat
 int _handleNotFound(struct MHD_Connection *pConn);
 
 int _handleError(struct MHD_Connection *pConn);
+
+int _handleDeleteFenceEntry(struct MHD_Connection *pConnection, struct MA_HandlerData *pData, const char *pId);
+
+int _handleDeleteGpsLog(struct MHD_Connection *pConnection, struct MA_HandlerData *pData, const char *pId);
 
 //endregion
 
@@ -266,11 +271,67 @@ int _answerConnection(void *pCls,
         }
     }
 
+   /*
+    * Answer POST requests
+    */
+    else if (0 == strcmp(pMethod, METHOD_DELETE)) {
+        /*
+         * Answer /fence_entry endpoint
+         */
+        if (0 == strcmp(pUrl, "/fence_entry")) {
+            char const *val = MHD_lookup_connection_value(pConn, MHD_GET_ARGUMENT_KIND, "id");
+            if (val) {
+                return _handleDeleteFenceEntry(pConn, pCls, val);
+            }
+        }
+
+        /*
+         * Answer /fence_entry endpoint
+         */
+        if (0 == strcmp(pUrl, "/gps_log")) {
+            char const *val = MHD_lookup_connection_value(pConn, MHD_GET_ARGUMENT_KIND, "id");
+            if (val) {
+                return _handleDeleteGpsLog(pConn, pCls, val);
+            }
+        }
+    }
+
     /*
      * Answer with 404 not found
      */
     *pUploadDataSize = 0;
     return _handleNotFound(pConn);
+}
+
+int _handleDeleteGpsLog(struct MHD_Connection *pConn, struct MA_HandlerData *pData, const char *pId) {
+    /*
+     * Craft json response
+     */
+    bson_t *json_response = bson_new();
+    BSON_APPEND_UTF8(json_response, "message", "not implemented");
+    char *responseBody = bson_as_json(json_response, NULL);
+
+    /*
+     * Queue a json response
+     */
+    struct MHD_Response *response;
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_MUST_COPY);
+    MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
+    int ret = MHD_queue_response(pConn, MHD_HTTP_OK, response);
+
+    /*
+     * Cleanup
+     */
+    MHD_destroy_response(response);
+    bson_destroy(json_response);
+    printf("_handleRoot() free(responseBody)\n");
+    bson_free(responseBody);
+
+    return ret;
+}
+
+int _handleDeleteFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, const char *pId) {
+    return 0;
 }
 
 #pragma clang diagnostic pop
@@ -280,7 +341,7 @@ int _handleRoot(struct MHD_Connection *pConn) {
      * Craft json response
      */
     bson_t *json_response = bson_new();
-    BSON_APPEND_UTF8(json_response, "message", "GeoFence Mark API");
+    BSON_APPEND_UTF8(json_response, "message", "not implemented");
     char *responseBody = bson_as_json(json_response, NULL);
 
     /*
