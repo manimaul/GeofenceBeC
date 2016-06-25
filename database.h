@@ -47,6 +47,13 @@ struct DB_Record *DB_insertFenceRecord(char const *pJson, mongoc_client_t *pClie
 struct DB_Record *DB_getFenceRecord(char const *pIdentifier, mongoc_client_t *pClient);
 
 /**
+ * Retrieve a list of log record sub-sets (id, time_window, bounding_box)
+ *
+ * returns struct DB_Record which you must later DB_deleteRecord()
+ */
+struct DB_Record *DB_getGpsLogRecordList(mongoc_client_t *pClient);
+
+/**
  * Retrieve a gps log record that spans a specified time
  *
  * returns struct DB_Record which you must later DB_deleteRecord()

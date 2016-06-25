@@ -77,16 +77,30 @@ int _handlePostFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *p
 int _handlePostGpsLog(struct MHD_Connection *pConn, struct MA_HandlerData *pData, struct MA_ConnectionInfo *pConnInfo);
 
 /**
+ * Request handler for /fence_entry endpoint
+ *
+ * param pConn - the connection to enqueue a response to
+ * param pData - data to retrieve a MongoDb client from
+ * param pId - the geofence id (i request param)
+ */
+int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, char const *pId);
+
+/**
  * Request handler for /gps_log endpoint
  *
  * param pConn - the connection to enqueue a response to
  * param pData - data to retrieve a MongoDb client from
- * param pConnInfo - connection info to retrieve the request body
+ * param epoch - a time within the gps log time frame (t request param)
  */
-int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, char const *pId);
-
-
 int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, long epoch);
+
+/**
+ * Request handler for /gps_log_list endpoint
+ *
+ * param pConn - the connection to enqueue a response to
+ * param pData - data to retrieve a MongoDb client from
+ */
+int _handleGetGpsLogEntryList(struct MHD_Connection *pConn, struct MA_HandlerData *pData);
 
 /**
  * Request handler for 404 - resource not found
@@ -224,6 +238,13 @@ int _answerConnection(void *pCls,
                 return _handleGetGpsLogEntry(pConn, pCls, time);
             }
         }
+
+        /*
+         * Answer gps_log endpoint
+         */
+        if (0 == strcmp(pUrl, "/gps_log_list")) {
+            return _handleGetGpsLogEntryList(pConn, pCls);
+        }
     }
 
    /*
@@ -358,6 +379,53 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     printf("_handleGetFenceEntry() json_decref(json_response)\n");
     json_decref(json_response);
     printf("_handleGetFenceEntry() free(responseBody)\n");
+    free(responseBody);
+
+    return ret;
+}
+
+int _handleGetGpsLogEntryList(struct MHD_Connection *pConn, struct MA_HandlerData *pData) {
+    /*
+     * Fetch the record from the database
+     */
+    mongoc_client_pool_t *pool = pData->pool;
+    mongoc_client_t *client;
+    client = mongoc_client_pool_pop(pool);
+    struct DB_Record *record = DB_getGpsLogRecordList(client);
+    mongoc_client_pool_push(pool, client);
+
+    /*
+     * Craft json response
+     */
+    json_t *json_response = json_object();
+    unsigned int statusCode;
+    if (record->record) {
+        json_object_set_new(json_response, "message", json_string(record->message));
+        json_object_set(json_response, "record", record->record); // not set_new because we free in cleanup
+        statusCode = MHD_HTTP_OK;
+    } else {
+        json_object_set_new(json_response, "message", json_string("DB_Record not found"));
+        json_object_set(json_response, "record", NULL);
+        statusCode = MHD_HTTP_NOT_FOUND;
+    }
+    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+
+    /*
+     * Queue a json response
+     */
+    struct MHD_Response *response;
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_MUST_COPY);
+    MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
+    int ret = MHD_queue_response(pConn, statusCode, response);
+
+    /**
+     * Cleanup
+     */
+    MHD_destroy_response(response);
+    DB_deleteRecord(record);
+    printf("_handleGetGpsLogEntry() json_decref(json_response)\n");
+    json_decref(json_response);
+    printf("_handleGetGpsLogEntry() free(responseBody)\n");
     free(responseBody);
 
     return ret;

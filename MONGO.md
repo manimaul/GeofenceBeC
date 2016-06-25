@@ -43,8 +43,9 @@ Exit shell with command ```quit()```
 show dbs
 use geofence 
 show collections
-db.geofence.find({})
-db.fences.remove({_id:ObjectId("5769e47bc3d5a2339819e911")})
+db.fences.find({})
+db.gps_logs.find({},{_id:1, time_window:1})
+db.gps_logs.remove({_id:ObjectId("")})
 
 db.users.update({"user_name" : "wkamp"},{$set: {"hash": "SzudL+cYLrREGAvNVwZJdRX7OhP0BdhfVFpyc9ic+Nk="}})
 db.users.update({"user_name" : "user"},{$set: {"organization": "Example"}})

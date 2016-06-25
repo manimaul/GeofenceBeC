@@ -241,6 +241,48 @@ struct DB_Record *DB_getFenceRecord(char const *pIdentifier, mongoc_client_t *pC
     return retVal;
 }
 
+struct DB_Record *DB_getGpsLogRecordList(mongoc_client_t *pClient) {
+    struct DB_Record *retVal = createRecord();
+
+    mongoc_collection_t *collection = mongoc_client_get_collection(pClient, DB, COLLECTION_GPS_LOGS);
+    mongoc_cursor_t *cursor;
+    bson_t const *doc;
+
+    /*
+     * Build the query
+     */
+    bson_t *query = bson_new();
+    bson_t *fields = bson_new();
+
+    BSON_APPEND_INT32(fields, "_id", 1);
+    BSON_APPEND_INT32(fields, "time_window", 1);
+    BSON_APPEND_INT32(fields, "bounding_box", 1);
+
+    cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 1000, 0, query, fields, NULL);
+
+    json_t *jsonArray = NULL;
+    while (mongoc_cursor_next(cursor, &doc)) {
+        json_error_t error;
+        char *value = bson_as_json(doc, NULL);
+        if (NULL == retVal->record) {
+            retVal->message = _createMessage("ok");
+            retVal->record = json_object();
+            jsonArray = json_array();
+            json_object_set_new(retVal->record, "records", jsonArray);
+        }
+        json_array_append_new(jsonArray, json_loads(value, strlen(value), &error));
+        printf("DB_getGpsLogRecord() bson_free(value)\n");
+        bson_free(value);
+    }
+
+    bson_destroy(query);
+    bson_destroy(fields);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+
+    return retVal;
+}
+
 struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) {
     struct DB_Record *retVal = createRecord();
 
