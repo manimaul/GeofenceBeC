@@ -145,29 +145,19 @@ int _appendData(struct MHD_Connection *pConn, size_t *pUploadDataSize, char cons
                 struct MA_ConnectionInfo *connectionInfo) {
 
     size_t len = *pUploadDataSize;
-    printf("_answerConnection upload size:%lu\n", len);
-    size_t actualLen = strlen(pUploadData);
-    if (actualLen != len) {
-        printf("_answerConnection WARNING size mismatch reported size_t:%lu : actual size_t:%lu", len, actualLen);
-        //len = actualLen;
-    }
-
+    printf("_answerConnection CHUNK size:%lu\n", len);
     if (connectionInfo->body == NULL) {
-        printf("_answerConnection INITIAL body size:%lu\n", len);
+        printf("_answerConnection CUMULATIVE body size:%lu\n", len);
         char *body = malloc(len);
         memcpy(body, pUploadData, len);
         connectionInfo->body = body;
         connectionInfo->sz = len;
     } else {
         size_t newSize = connectionInfo->sz + len;
-        printf("_answerConnection CHUNK size:%lu\n", len);
-        printf("_answerConnection CHUNK_STR_LEN size:%lu\n", strlen(pUploadData));
-        printf("_answerConnection TOTAL body size:%lu\n", newSize);
+        printf("_answerConnection CUMULATIVE body size:%lu\n", newSize);
         char *temp = realloc(connectionInfo->body, newSize);
         if (temp != NULL) {
-            printf("_answerConnection copying upload data chunk");
             memcpy(&temp[connectionInfo->sz], pUploadData, len);
-            //strcat(temp, pUploadData);
             connectionInfo->body = temp;
             connectionInfo->sz = newSize;
         } else {
@@ -176,7 +166,6 @@ int _appendData(struct MHD_Connection *pConn, size_t *pUploadDataSize, char cons
     }
     *pUploadDataSize = 0;
     return MHD_YES;
-
 }
 
 #pragma clang diagnostic push
