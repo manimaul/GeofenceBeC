@@ -19,6 +19,7 @@ struct MA_HandlerData {
 };
 
 struct MA_ConnectionInfo {
+    size_t sz;
     char *body;
 };
 
@@ -103,6 +104,7 @@ int _handleError(struct MHD_Connection *pConn);
 static struct MA_ConnectionInfo *__createConnectionInfo() {
     struct MA_ConnectionInfo *info = malloc(sizeof(struct MA_ConnectionInfo));
     info->body = NULL;
+    info->sz = 0;
     return info;
 }
 
@@ -143,33 +145,36 @@ int _appendData(struct MHD_Connection *pConn, size_t *pUploadDataSize, char cons
                 struct MA_ConnectionInfo *connectionInfo) {
 
     size_t len = *pUploadDataSize;
-    *pUploadDataSize = 0;
     printf("_answerConnection upload size:%lu\n", len);
     size_t actualLen = strlen(pUploadData);
     if (actualLen != len) {
         printf("_answerConnection WARNING size mismatch reported size_t:%lu : actual size_t:%lu", len, actualLen);
-        len = actualLen;
+        //len = actualLen;
     }
 
     if (connectionInfo->body == NULL) {
         printf("_answerConnection INITIAL body size:%lu\n", len);
         char *body = malloc(len);
-        strcpy(body, pUploadData);
+        memcpy(body, pUploadData, len);
         connectionInfo->body = body;
+        connectionInfo->sz = len;
     } else {
-        size_t sz = strlen(connectionInfo->body);
+        size_t newSize = connectionInfo->sz + len;
         printf("_answerConnection CHUNK size:%lu\n", len);
         printf("_answerConnection CHUNK_STR_LEN size:%lu\n", strlen(pUploadData));
-        printf("_answerConnection TOTAL body size:%lu\n", sz + len);
-        char *temp = realloc(connectionInfo->body, sz + len);
+        printf("_answerConnection TOTAL body size:%lu\n", newSize);
+        char *temp = realloc(connectionInfo->body, newSize);
         if (temp != NULL) {
             printf("_answerConnection copying upload data chunk");
-            strcat(temp, pUploadData);
+            memcpy(&temp[connectionInfo->sz], pUploadData, len);
+            //strcat(temp, pUploadData);
             connectionInfo->body = temp;
+            connectionInfo->sz = newSize;
         } else {
             return _handleError(pConn);
         }
     }
+    *pUploadDataSize = 0;
     return MHD_YES;
 
 }
