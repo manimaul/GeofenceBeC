@@ -341,7 +341,7 @@ int _handleRoot(struct MHD_Connection *pConn) {
      * Craft json response
      */
     bson_t *json_response = bson_new();
-    BSON_APPEND_UTF8(json_response, "message", "not implemented");
+    BSON_APPEND_UTF8(json_response, "message", "GeoFenceMark");
     char *responseBody = bson_as_json(json_response, NULL);
 
     /*
@@ -376,8 +376,8 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     if (record->record) { // Find corresponding log entry
         json_t *entryTime = json_object_get(record->record, "entry_time");
         if (json_is_number(entryTime)) {
-            long et = (long) json_real_value(entryTime); //todo: fix loss of precision (jansson - json_loads)
-            logRecord = DB_getGpsLogRecord(et, client);
+            double et = json_real_value(entryTime); //todo: fix loss of precision (jansson - json_loads)
+            logRecord = DB_getGpsLogRecord((long) et, client);
             struct LocationInfo locationInfo;
             double fenceLat = json_real_value(json_object_get(record->record, "latitude"));
             double fenceLng = json_real_value(json_object_get(record->record, "longitude"));
@@ -391,9 +391,12 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
                 LOC_calculateLocationInfo(&locationInfo, fenceLat, fenceLng, ptLat, ptLng);
                 json_object_set_new(logObj, "distance", json_real(locationInfo.distanceMeters));
                 if (locationInfo.distanceMeters <= radius) {
-                    json_int_t actualEntryTime = json_integer_value(json_object_get(logObj, "time"));
-                    json_int_t entryTimeDelta = et - actualEntryTime;
-                    json_object_set_new(actualEntryPoint, "entry_delta", json_integer(entryTimeDelta));
+                    double actualEntryTime = json_real_value(json_object_get(logObj, "time"));
+                    double entryTimeDelta = et - actualEntryTime;
+                    printf("reported entry time %lf", et);
+                    printf("actual entry time %lf", actualEntryTime);
+                    printf("delta entry time %lf", entryTimeDelta);
+                    json_object_set_new(actualEntryPoint, "entry_delta", json_real(entryTimeDelta));
                     if (actualEntryPoint == NULL) {
                         actualEntryPoint = logObj;
                     }
