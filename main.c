@@ -393,10 +393,10 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
                 if (locationInfo.distanceMeters <= radius) {
                     double actualEntryTime = json_real_value(json_object_get(logObj, "time"));
                     double entryTimeDelta = et - actualEntryTime;
-                    printf("reported entry time %lf", et);
-                    printf("actual entry time %lf", actualEntryTime);
-                    printf("delta entry time %lf", entryTimeDelta);
-                    json_object_set_new(actualEntryPoint, "entry_delta", json_real(entryTimeDelta));
+                    printf("reported entry time %lf\n", et);
+                    printf("actual entry time %lf\n", actualEntryTime);
+                    printf("delta entry time %lf\n", entryTimeDelta);
+                    json_object_set_new(logObj, "entry_delta", json_real(entryTimeDelta));
                     if (actualEntryPoint == NULL) {
                         actualEntryPoint = logObj;
                     }
