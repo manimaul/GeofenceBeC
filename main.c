@@ -2,6 +2,7 @@
 #include <jansson.h>
 #include <string.h>
 #include <libmongoc-1.0/mongoc.h>
+#include <signal.h>
 #include "database.h"
 #include "location.h"
 
@@ -657,6 +658,32 @@ int _handleNotFound(struct MHD_Connection *pConn) {
 
 //region PUBLIC FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+void handleSigalrm(int signal) {
+    if (signal != SIGALRM) {
+        fprintf(stderr, "Caught wrong signal: %d\n", signal);
+    }
+}
+
+void doSleep(unsigned int seconds) {
+    struct sigaction sa;
+    sigset_t mask;
+
+    sa.sa_handler = &handleSigalrm; // Intercept and ignore SIGALRM
+    sa.sa_flags = SA_RESETHAND; // Remove the handler after first signal
+    sigfillset(&sa.sa_mask);
+    sigaction(SIGALRM, &sa, NULL);
+
+    // Get the current signal mask
+    sigprocmask(0, NULL, &mask);
+
+    // Unblock SIGALRM
+    sigdelset(&mask, SIGALRM);
+
+    // Wait with this mask
+    alarm(seconds);
+    sigsuspend(&mask);
+}
+
 int main() {
     /**
      * Initialize mongo-c
@@ -689,14 +716,13 @@ int main() {
      * Wait for the 'q' key if the daemon was started
      */
     if (NULL != daemon) {
-        printf("GeoFence Http daemon running - press 'q' to quit.\n");
-        waitChar:
-        {
-            int c = getchar();
-            if (c != 'q') {
-                goto waitChar;
-            }
-        };
+        printf("GeoFence Http daemon running\n");
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-noreturn"
+        for (;;) {
+            doSleep(10);
+        }
+#pragma clang diagnostic pop
     }
 
 
