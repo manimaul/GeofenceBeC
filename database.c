@@ -58,7 +58,6 @@ struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, cha
         collection = mongoc_client_get_collection(pClient, DB, pCollection);
         char *insertJson = json_dumps(record, JSON_COMPACT);
         doc = bson_new_from_json((uint8_t const *) insertJson, -1, &bsonError);
-        printf("_insertRecord() free(insertJson)\n");
         free(insertJson);
         if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, doc, NULL, &bsonError)) {
             retVal->message = malloc(strlen(bsonError.message));
@@ -69,7 +68,6 @@ struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, cha
             json_error_t error;
             retVal->record = json_loads(value, strlen(value), &error);
             retVal->message = _createMessage("ok");
-            printf("_insertRecord() bson_free(value)\n");
             bson_free(value);
         }
         bson_destroy(doc);
@@ -158,7 +156,6 @@ json_t *_validateGpsLogRecord(char const *pJson) {
         if (result) {
             return json;
         } else {
-            printf("_validateGpsLogRecord() json_decref(json)\n");
             json_decref(json);
             return NULL;
         }
@@ -194,7 +191,6 @@ json_t *_validateFenceRecord(char const *pJson) {
     if (result) {
         return json;
     } else {
-        printf("_validateFenceRecord() json_decref(json)\n");
         json_decref(json);
         return NULL;
     }
@@ -230,7 +226,6 @@ struct DB_Record *DB_getFenceRecord(char const *pIdentifier, mongoc_client_t *pC
         char *value = bson_as_json(doc, NULL);
         retVal->record = json_loads(value, strlen(value), &error);
         retVal->message = _createMessage("ok");
-        printf("DB_getFenceRecord() bson_free(value)\n");
         bson_free(value);
     }
 
@@ -271,7 +266,6 @@ struct DB_Record *DB_getGpsLogRecordList(mongoc_client_t *pClient) {
             json_object_set_new(retVal->record, "records", jsonArray);
         }
         json_array_append_new(jsonArray, json_loads(value, strlen(value), &error));
-        printf("DB_getGpsLogRecord() bson_free(value)\n");
         bson_free(value);
     }
 
@@ -312,7 +306,6 @@ struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) 
         char *value = bson_as_json(doc, NULL);
         retVal->record = json_loads(value, strlen(value), &error);
         retVal->message = _createMessage("ok");
-        printf("DB_getGpsLogRecord() bson_free(value)\n");
         bson_free(value);
     }
 
@@ -339,14 +332,11 @@ struct DB_Record *createRecord() {
 void DB_deleteRecord(struct DB_Record *pResult) {
     if (NULL != pResult) {
         if (NULL != pResult->record) {
-            printf("DB_deleteRecord() json_decref(DB_Record->record)\n");
             json_decref(pResult->record);
         }
         if (NULL != pResult->message) {
-            printf("DB_deleteRecord() free(DB_Record->message)\n");
             free(pResult->message);
         }
-        printf("DB_deleteRecord() free(DB_Record)\n");
         free(pResult);
     }
 }

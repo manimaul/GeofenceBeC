@@ -121,6 +121,8 @@ int _handleDeleteGpsLog(struct MHD_Connection *pConnection, struct MA_HandlerDat
 
 //region STATIC FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+int _handleGetFenceEntryList(struct MHD_Connection *pConn, void *pCls);
+
 static struct MA_ConnectionInfo *__createConnectionInfo() {
     struct MA_ConnectionInfo *info = malloc(sizeof(struct MA_ConnectionInfo));
     info->body = NULL;
@@ -134,10 +136,8 @@ static void __destroyConnectionInfo(struct MA_ConnectionInfo *pInfo) {
     }
 
     if (NULL != pInfo->body) {
-        printf("__destroyConnectionInfo() free(free(MA_ConnectionInfo->body)\n");
         free(pInfo->body);
     }
-    printf("__destroyConnectionInfo() free(MA_ConnectionInfo)\n");
     free(pInfo);
 }
 
@@ -165,16 +165,13 @@ int _appendData(struct MHD_Connection *pConn, size_t *pUploadDataSize, char cons
                 struct MA_ConnectionInfo *connectionInfo) {
 
     size_t len = *pUploadDataSize;
-    printf("_answerConnection CHUNK size:%lu\n", len);
     if (connectionInfo->body == NULL) {
-        printf("_answerConnection CUMULATIVE body size:%lu\n", len);
         char *body = malloc(len);
         memcpy(body, pUploadData, len);
         connectionInfo->body = body;
         connectionInfo->sz = len;
     } else {
         size_t newSize = connectionInfo->sz + len;
-        printf("_answerConnection CUMULATIVE body size:%lu\n", newSize);
         char *temp = realloc(connectionInfo->body, newSize);
         if (temp != NULL) {
             memcpy(&temp[connectionInfo->sz], pUploadData, len);
@@ -251,6 +248,13 @@ int _answerConnection(void *pCls,
         if (0 == strcmp(pUrl, "/gps_log_list")) {
             return _handleGetGpsLogEntryList(pConn, pCls);
         }
+
+        /*
+         * Answer gps_log endpoint
+         */
+        if (0 == strcmp(pUrl, "/fence_entry_list")) {
+            return _handleGetFenceEntryList(pConn, pCls);
+        }
     }
 
    /*
@@ -325,7 +329,6 @@ int _handleDeleteGpsLog(struct MHD_Connection *pConn, struct MA_HandlerData *pDa
      */
     MHD_destroy_response(response);
     bson_destroy(json_response);
-    printf("_handleRoot() free(responseBody)\n");
     bson_free(responseBody);
 
     return ret;
@@ -358,7 +361,6 @@ int _handleRoot(struct MHD_Connection *pConn) {
      */
     MHD_destroy_response(response);
     bson_destroy(json_response);
-    printf("_handleRoot() free(responseBody)\n");
     bson_free(responseBody);
 
     return ret;
@@ -394,9 +396,6 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
                 if (locationInfo.distanceMeters <= radius) {
                     double actualEntryTime = json_real_value(json_object_get(logObj, "time"));
                     double entryTimeDelta = et - actualEntryTime;
-                    printf("reported entry time %lf\n", et);
-                    printf("actual entry time %lf\n", actualEntryTime);
-                    printf("delta entry time %lf\n", entryTimeDelta);
                     json_object_set_new(logObj, "entry_delta", json_real(entryTimeDelta));
                     if (actualEntryPoint == NULL) {
                         actualEntryPoint = logObj;
@@ -441,9 +440,7 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     MHD_destroy_response(response);
     DB_deleteRecord(record);
     DB_deleteRecord(logRecord);
-    printf("_handleGetFenceEntry() json_decref(json_response)\n");
     json_decref(json_response);
-    printf("_handleGetFenceEntry() free(responseBody)\n");
     free(responseBody);
 
     return ret;
@@ -488,12 +485,15 @@ int _handleGetGpsLogEntryList(struct MHD_Connection *pConn, struct MA_HandlerDat
      */
     MHD_destroy_response(response);
     DB_deleteRecord(record);
-    printf("_handleGetGpsLogEntry() json_decref(json_response)\n");
     json_decref(json_response);
-    printf("_handleGetGpsLogEntry() free(responseBody)\n");
     free(responseBody);
 
     return ret;
+}
+
+
+int _handleGetFenceEntryList(struct MHD_Connection *pConn, void *pCls) {
+    return 0;
 }
 
 int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, long epoch) {
@@ -535,9 +535,7 @@ int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *p
      */
     MHD_destroy_response(response);
     DB_deleteRecord(record);
-    printf("_handleGetGpsLogEntry() json_decref(json_response)\n");
     json_decref(json_response);
-    printf("_handleGetGpsLogEntry() free(responseBody)\n");
     free(responseBody);
 
     return ret;
@@ -580,9 +578,7 @@ int _handlePostWithDbInsertBodyJson(struct MHD_Connection *pConn, struct MA_Hand
      */
     MHD_destroy_response(response);
     DB_deleteRecord(record);
-    printf("_handlePostWithDbInsertBodyJson() json_decref(json_response)\n");
     json_decref(json_response);
-    printf("_handlePostWithDbInsertBodyJson() free(responseBody)\n");
     free(responseBody);
 
     return ret;
@@ -617,9 +613,7 @@ int _handleError(struct MHD_Connection *pConn) {
      * Cleanup
      */
     MHD_destroy_response(response);
-    printf("_handleError() json_decref(json_response)\n");
     json_decref(json_response);
-    printf("_handleError() free(responseBody)\n");
     free(responseBody);
 
     return ret;
@@ -646,9 +640,7 @@ int _handleNotFound(struct MHD_Connection *pConn) {
      * Cleanup
      */
     MHD_destroy_response(response);
-    printf("_handleNotFound() json_decref(json_response)\n");
     json_decref(json_response);
-    printf("_handleNotFound() free(responseBody)\n");
     free(responseBody);
 
     return ret;
@@ -733,7 +725,6 @@ int main() {
     mongoc_uri_destroy(uri);
     mongoc_cleanup();
 
-    printf("main() free(MA_HandlerData)\n");
     free(data);
 
     /**
