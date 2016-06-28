@@ -117,11 +117,11 @@ int _handleDeleteFenceEntry(struct MHD_Connection *pConnection, struct MA_Handle
 
 int _handleDeleteGpsLog(struct MHD_Connection *pConnection, struct MA_HandlerData *pData, const char *pId);
 
+int _handleGetFenceEntryList(struct MHD_Connection *pConn, struct MA_HandlerData *pData);
+
 //endregion
 
 //region STATIC FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-int _handleGetFenceEntryList(struct MHD_Connection *pConn, void *pCls);
 
 static struct MA_ConnectionInfo *__createConnectionInfo() {
     struct MA_ConnectionInfo *info = malloc(sizeof(struct MA_ConnectionInfo));
@@ -492,8 +492,49 @@ int _handleGetGpsLogEntryList(struct MHD_Connection *pConn, struct MA_HandlerDat
 }
 
 
-int _handleGetFenceEntryList(struct MHD_Connection *pConn, void *pCls) {
-    return 0;
+int _handleGetFenceEntryList(struct MHD_Connection *pConn, struct MA_HandlerData *pData) {
+    /*
+     * Fetch the record from the database
+     */
+    mongoc_client_pool_t *pool = pData->pool;
+    mongoc_client_t *client;
+    client = mongoc_client_pool_pop(pool);
+    struct DB_Record *record = DB_getFenceRecordList(client);
+    mongoc_client_pool_push(pool, client);
+
+    /*
+     * Craft json response
+     */
+    json_t *json_response = json_object();
+    unsigned int statusCode;
+    if (record->record) {
+        json_object_set_new(json_response, "message", json_string(record->message));
+        json_object_set(json_response, "record", record->record); // not set_new because we free in cleanup
+        statusCode = MHD_HTTP_OK;
+    } else {
+        json_object_set_new(json_response, "message", json_string("DB_Record not found"));
+        json_object_set(json_response, "record", NULL);
+        statusCode = MHD_HTTP_NOT_FOUND;
+    }
+    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+
+    /*
+     * Queue a json response
+     */
+    struct MHD_Response *response;
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_MUST_COPY);
+    MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
+    int ret = MHD_queue_response(pConn, statusCode, response);
+
+    /**
+     * Cleanup
+     */
+    MHD_destroy_response(response);
+    DB_deleteRecord(record);
+    json_decref(json_response);
+    free(responseBody);
+
+    return ret;
 }
 
 int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, long epoch) {

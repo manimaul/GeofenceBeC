@@ -277,6 +277,41 @@ struct DB_Record *DB_getGpsLogRecordList(mongoc_client_t *pClient) {
     return retVal;
 }
 
+struct DB_Record *DB_getFenceRecordList(mongoc_client_t *pClient) {
+    struct DB_Record *retVal = createRecord();
+
+    mongoc_collection_t *collection = mongoc_client_get_collection(pClient, DB, COLLECTION_FENCES);
+    mongoc_cursor_t *cursor;
+    bson_t const *doc;
+
+    /*
+     * Build the query
+     */
+    bson_t *query = bson_new();
+    cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 1000, 0, query, NULL, NULL);
+
+    json_t *jsonArray = NULL;
+    while (mongoc_cursor_next(cursor, &doc)) {
+        json_error_t error;
+        char *value = bson_as_json(doc, NULL);
+        if (NULL == retVal->record) {
+            retVal->message = _createMessage("ok");
+            retVal->record = json_object();
+            jsonArray = json_array();
+            json_object_set_new(retVal->record, "records", jsonArray);
+        }
+        json_array_append_new(jsonArray, json_loads(value, strlen(value), &error));
+        bson_free(value);
+    }
+
+    bson_destroy(query);
+
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+
+    return retVal;
+}
+
 struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) {
     struct DB_Record *retVal = createRecord();
 

@@ -54,6 +54,13 @@ struct DB_Record *DB_getFenceRecord(char const *pIdentifier, mongoc_client_t *pC
 struct DB_Record *DB_getGpsLogRecordList(mongoc_client_t *pClient);
 
 /**
+ * Retrieve a list of fence entry records
+ *
+ * returns struct DB_Record which you must later DB_deleteRecord()
+ */
+struct DB_Record *DB_getFenceRecordList(mongoc_client_t *pClient);
+
+/**
  * Retrieve a gps log record that spans a specified time
  *
  * returns struct DB_Record which you must later DB_deleteRecord()
