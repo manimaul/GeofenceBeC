@@ -68,8 +68,18 @@ struct DB_Record *DB_getFenceRecordList(mongoc_client_t *pClient);
 struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient);
 
 /**
+ * Delete a gps log record with an id.
+ */
+void DB_deleteGpsLogRecord(char const *pIdentifier, mongoc_client_t *pClient);
+
+/**
+ * Delete a gps log record with an id.
+ */
+void DB_deleteFenceRecord(char const *pIdentifier, mongoc_client_t *pClient);
+
+/**
  * Deallocate a record that has been retrieved
  */
-void DB_deleteRecord(struct DB_Record *pRecord);
+void DB_freeRecord(struct DB_Record *pRecord);
 
 #endif //GEOFENCEBEC_DATABASE_H

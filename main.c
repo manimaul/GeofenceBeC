@@ -309,12 +309,19 @@ int _answerConnection(void *pCls,
 }
 
 int _handleDeleteGpsLog(struct MHD_Connection *pConn, struct MA_HandlerData *pData, const char *pId) {
+    mongoc_client_pool_t *pool = pData->pool;
+    mongoc_client_t *client;
+    client = mongoc_client_pool_pop(pool);
+    DB_deleteGpsLogRecord(pId, client);
+    mongoc_client_pool_push(pool, client);
+
     /*
      * Craft json response
      */
-    bson_t *json_response = bson_new();
-    BSON_APPEND_UTF8(json_response, "message", "not implemented");
-    char *responseBody = bson_as_json(json_response, NULL);
+    bson_t json_response;
+    bson_init(&json_response);
+    BSON_APPEND_UTF8(&json_response, "message", "ok");
+    char *responseBody = bson_as_json(&json_response, NULL);
 
     /*
      * Queue a json response
@@ -328,14 +335,41 @@ int _handleDeleteGpsLog(struct MHD_Connection *pConn, struct MA_HandlerData *pDa
      * Cleanup
      */
     MHD_destroy_response(response);
-    bson_destroy(json_response);
     bson_free(responseBody);
 
     return ret;
 }
 
 int _handleDeleteFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, const char *pId) {
-    return 0;
+    mongoc_client_pool_t *pool = pData->pool;
+    mongoc_client_t *client;
+    client = mongoc_client_pool_pop(pool);
+    DB_deleteFenceRecord(pId, client);
+    mongoc_client_pool_push(pool, client);
+
+    /*
+     * Craft json response
+     */
+    bson_t json_response;
+    bson_init(&json_response);
+    BSON_APPEND_UTF8(&json_response, "message", "ok");
+    char *responseBody = bson_as_json(&json_response, NULL);
+
+    /*
+     * Queue a json response
+     */
+    struct MHD_Response *response;
+    response = MHD_create_response_from_buffer(strlen(responseBody), (void *) responseBody, MHD_RESPMEM_MUST_COPY);
+    MHD_add_response_header(response, CONTENT_TYPE, APPLICATION_JSON);
+    int ret = MHD_queue_response(pConn, MHD_HTTP_OK, response);
+
+    /*
+     * Cleanup
+     */
+    MHD_destroy_response(response);
+    bson_free(responseBody);
+
+    return ret;
 }
 
 #pragma clang diagnostic pop
@@ -438,8 +472,8 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
      * Cleanup
      */
     MHD_destroy_response(response);
-    DB_deleteRecord(record);
-    DB_deleteRecord(logRecord);
+    DB_freeRecord(record);
+    DB_freeRecord(logRecord);
     json_decref(json_response);
     free(responseBody);
 
@@ -484,7 +518,7 @@ int _handleGetGpsLogEntryList(struct MHD_Connection *pConn, struct MA_HandlerDat
      * Cleanup
      */
     MHD_destroy_response(response);
-    DB_deleteRecord(record);
+    DB_freeRecord(record);
     json_decref(json_response);
     free(responseBody);
 
@@ -530,7 +564,7 @@ int _handleGetFenceEntryList(struct MHD_Connection *pConn, struct MA_HandlerData
      * Cleanup
      */
     MHD_destroy_response(response);
-    DB_deleteRecord(record);
+    DB_freeRecord(record);
     json_decref(json_response);
     free(responseBody);
 
@@ -575,7 +609,7 @@ int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *p
      * Cleanup
      */
     MHD_destroy_response(response);
-    DB_deleteRecord(record);
+    DB_freeRecord(record);
     json_decref(json_response);
     free(responseBody);
 
@@ -618,7 +652,7 @@ int _handlePostWithDbInsertBodyJson(struct MHD_Connection *pConn, struct MA_Hand
      * Cleanup
      */
     MHD_destroy_response(response);
-    DB_deleteRecord(record);
+    DB_freeRecord(record);
     json_decref(json_response);
     free(responseBody);
 

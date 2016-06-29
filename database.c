@@ -20,9 +20,9 @@ struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, cha
                                 _insertFunction fPtr);
 
 /**
- * Create a DB_Record structure that must be freed with void DB_deleteRecord(struct DB_Record* pResult)
+ * Create a DB_Record structure that must be freed with void DB_freeRecord(struct DB_Record* pResult)
  */
-struct DB_Record *createRecord();
+struct DB_Record *_allocateRecord();
 
 /**
  * Validate a json string as a valid fence_record
@@ -49,7 +49,7 @@ char *_createMessage(char const *const msg);
 
 struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, char const* pCollection,
                                 _insertFunction fPtr) {
-    struct DB_Record *retVal = createRecord();
+    struct DB_Record *retVal = _allocateRecord();
     json_t *record = fPtr(pJson);
     if (record) {
         mongoc_collection_t *collection;
@@ -209,7 +209,7 @@ struct DB_Record *DB_insertFenceRecord(char const *pJson, mongoc_client_t *pClie
 }
 
 struct DB_Record *DB_getFenceRecord(char const *pIdentifier, mongoc_client_t *pClient) {
-    struct DB_Record *retVal = createRecord();
+    struct DB_Record *retVal = _allocateRecord();
 
     mongoc_collection_t *collection;
     mongoc_cursor_t *cursor;
@@ -237,7 +237,7 @@ struct DB_Record *DB_getFenceRecord(char const *pIdentifier, mongoc_client_t *pC
 }
 
 struct DB_Record *DB_getGpsLogRecordList(mongoc_client_t *pClient) {
-    struct DB_Record *retVal = createRecord();
+    struct DB_Record *retVal = _allocateRecord();
 
     mongoc_collection_t *collection = mongoc_client_get_collection(pClient, DB, COLLECTION_GPS_LOGS);
     mongoc_cursor_t *cursor;
@@ -278,7 +278,7 @@ struct DB_Record *DB_getGpsLogRecordList(mongoc_client_t *pClient) {
 }
 
 struct DB_Record *DB_getFenceRecordList(mongoc_client_t *pClient) {
-    struct DB_Record *retVal = createRecord();
+    struct DB_Record *retVal = _allocateRecord();
 
     mongoc_collection_t *collection = mongoc_client_get_collection(pClient, DB, COLLECTION_FENCES);
     mongoc_cursor_t *cursor;
@@ -313,7 +313,7 @@ struct DB_Record *DB_getFenceRecordList(mongoc_client_t *pClient) {
 }
 
 struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) {
-    struct DB_Record *retVal = createRecord();
+    struct DB_Record *retVal = _allocateRecord();
 
     mongoc_collection_t *collection = mongoc_client_get_collection(pClient, DB, COLLECTION_GPS_LOGS);
     mongoc_cursor_t *cursor;
@@ -322,19 +322,20 @@ struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) 
     /*
      * Build the query
      */
-    bson_t *query = bson_new();
+    bson_t query;
+    bson_init(&query);
     bson_t queryChildEndTime;
     bson_t queryChildStartTime;
 
-    BSON_APPEND_DOCUMENT_BEGIN(query, "time_window.end_time", &queryChildEndTime);
+    BSON_APPEND_DOCUMENT_BEGIN(&query, "time_window.end_time", &queryChildEndTime);
     BSON_APPEND_INT64(&queryChildEndTime, "$gte", pEpochTime);
-    bson_append_document_end(query, &queryChildEndTime);
+    bson_append_document_end(&query, &queryChildEndTime);
 
-    BSON_APPEND_DOCUMENT_BEGIN(query, "time_window.start_time", &queryChildStartTime);
+    BSON_APPEND_DOCUMENT_BEGIN(&query, "time_window.start_time", &queryChildStartTime);
     BSON_APPEND_INT64(&queryChildStartTime, "$lte", pEpochTime);
-    bson_append_document_end(query, &queryChildStartTime);
+    bson_append_document_end(&query, &queryChildStartTime);
 
-    cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 1, 0, query, NULL, NULL);
+    cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 1, 0, &query, NULL, NULL);
 
     if (mongoc_cursor_next(cursor, &doc)) {
         json_error_t error;
@@ -344,11 +345,40 @@ struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) 
         bson_free(value);
     }
 
-    bson_destroy(query);
     mongoc_cursor_destroy(cursor);
     mongoc_collection_destroy(collection);
 
     return retVal;
+}
+
+void DB_deleteGpsLogRecord(char const *pIdentifier, mongoc_client_t *pClient) {
+    mongoc_collection_t *collection = mongoc_client_get_collection(pClient, DB, COLLECTION_GPS_LOGS);
+    bson_t selector;
+    bson_init(&selector);
+
+    bson_oid_t oid;
+    bson_oid_init_from_string(&oid, pIdentifier);
+    BSON_APPEND_OID(&selector, "_id", &oid);
+    bson_error_t error;
+
+    mongoc_collection_remove(collection, MONGOC_REMOVE_SINGLE_REMOVE, &selector, NULL, &error);
+    printf("error %s\n", error.message);
+    mongoc_collection_destroy(collection);
+}
+
+void DB_deleteFenceRecord(char const *pIdentifier, mongoc_client_t *pClient) {
+    mongoc_collection_t *collection = mongoc_client_get_collection(pClient, DB, COLLECTION_FENCES);
+    bson_t selector;
+    bson_init(&selector);
+
+    bson_oid_t oid;
+    bson_oid_init_from_string(&oid, pIdentifier);
+    BSON_APPEND_OID(&selector, "_id", &oid);
+    bson_error_t error;
+
+    mongoc_collection_remove(collection, MONGOC_REMOVE_SINGLE_REMOVE, &selector, NULL, &error);
+    printf("error %s\n", error.message);
+    mongoc_collection_destroy(collection);
 }
 
 char *_createMessage(char const * const pMsg) {
@@ -357,14 +387,14 @@ char *_createMessage(char const * const pMsg) {
     return retVal;
 }
 
-struct DB_Record *createRecord() {
+struct DB_Record *_allocateRecord() {
     struct DB_Record *retVal = malloc(sizeof(struct DB_Record));
     retVal->message = NULL;
     retVal->record = NULL;
     return retVal;
 }
 
-void DB_deleteRecord(struct DB_Record *pResult) {
+void DB_freeRecord(struct DB_Record *pResult) {
     if (NULL != pResult) {
         if (NULL != pResult->record) {
             json_decref(pResult->record);
