@@ -294,12 +294,16 @@ struct DB_Record *DB_getFenceRecordList(mongoc_client_t *pClient) {
     while (mongoc_cursor_next(cursor, &doc)) {
         json_error_t error;
         char *value = bson_as_json(doc, NULL);
+        //todo: add whether there is a corresponding gps_log
+
+        //initialize jsonArray
         if (NULL == retVal->record) {
             retVal->message = _createMessage("ok");
             retVal->record = json_object();
             jsonArray = json_array();
             json_object_set_new(retVal->record, "records", jsonArray);
         }
+
         json_array_append_new(jsonArray, json_loads(value, strlen(value), &error));
         bson_free(value);
     }
