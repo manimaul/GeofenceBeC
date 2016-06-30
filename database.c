@@ -9,14 +9,14 @@
 
 //region PRIVATE INTERFACE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-typedef json_t * (*_insertFunction) (char const *pJson);
+typedef bson_t *(*_insertFunction)(char const *pJson);
 
 /**
  * Insert a record into the database
  *
  * param pJson - the json post body
  */
-struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, char const* pCollection,
+struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, char const *pCollection,
                                 _insertFunction fPtr);
 
 /**
@@ -29,14 +29,14 @@ struct DB_Record *_allocateRecord();
  *
  * returns a json_t object when valid NULL otherwise
  */
-json_t *_validateFenceRecord(char const *pJson);
+bson_t *_validateFenceRecord(char const *pJson);
 
 /**
  * Validate a json string as a valid gps_log
  *
  * returns a json_t object when valid NULL otherwise
  */
-json_t *_validateGpsLogRecord(char const *pJson);
+bson_t *_validateGpsLogRecord(char const *pJson);
 
 /**
  * Create a message that must be freed with free()
@@ -47,30 +47,21 @@ char *_createMessage(char const *const msg);
 
 //region PRIVATE FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, char const* pCollection,
+struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, char const *pCollection,
                                 _insertFunction fPtr) {
     struct DB_Record *retVal = _allocateRecord();
-    json_t *record = fPtr(pJson);
+    bson_t *record = fPtr(pJson);
     if (record) {
         mongoc_collection_t *collection;
         bson_error_t bsonError;
-        bson_t *doc;
         collection = mongoc_client_get_collection(pClient, DB, pCollection);
-        char *insertJson = json_dumps(record, JSON_COMPACT);
-        doc = bson_new_from_json((uint8_t const *) insertJson, -1, &bsonError);
-        free(insertJson);
-        if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, doc, NULL, &bsonError)) {
-            retVal->message = malloc(strlen(bsonError.message));
-            strcpy(retVal->message, bsonError.message);
+        if (!mongoc_collection_insert(collection, MONGOC_INSERT_NONE, record, NULL, &bsonError)) {
+            retVal->message = _createMessage(bsonError.message);
             retVal->record = NULL;
         } else {
-            char *value = bson_as_json(doc, NULL);
-            json_error_t error;
-            retVal->record = json_loads(value, strlen(value), &error);
+            retVal->record = record;
             retVal->message = _createMessage("ok");
-            bson_free(value);
         }
-        bson_destroy(doc);
         mongoc_collection_destroy(collection);
     } else {
         retVal->message = _createMessage("validation error");
@@ -78,120 +69,184 @@ struct DB_Record *_insertRecord(char const *pJson, mongoc_client_t *pClient, cha
     return retVal;
 }
 
-json_t *_validateGpsLogRecord(char const *pJson) {
-    json_error_t error;
-    json_t *json = json_loads(pJson, strlen(pJson), &error);
+bson_t *_validateGpsLogRecord(char const *pJson) {
     double minLatitude = 90.0;
     double maxLatitude = -90.0;
     double minLongitude = 180.0;
     double maxLongitude = -180.0;
-    json_int_t startTime = 0;
-    json_int_t endTime = 0;
-    bool result = true;
-    if (json != NULL) {
-        json_t *obj = json_object_get(json, "log");
-        if (!json_is_array(obj)) {
-            result = false;
-        } else {
-            size_t index;
-            json_t *logObj;
-            json_array_foreach(obj, index, logObj) {
-                json_t *value = json_object_get(logObj, "latitude");
-                if (!json_is_number(value)) {
-                    result = false;
-                    goto resultBlock;
-                }
-                value = json_object_get(logObj, "longitude");
-                if (!json_is_number(value)) {
-                    result = false;
-                    goto resultBlock;
-                }
-                double longitude = json_number_value(value);
-                if (index == 0) {
-                    minLongitude = longitude;
-                    maxLongitude = longitude;
-                } else {
-                    minLongitude = MIN(minLongitude, longitude);
-                    maxLongitude = MAX(maxLongitude, longitude);
-                }
-                value = json_object_get(logObj, "time");
-                if (!json_is_number(value)) {
-                    result = false;
-                    goto resultBlock;
-                }
-                double latitude = json_number_value(value);
-                if (index == 0) {
-                    minLatitude= latitude;
-                    maxLatitude= latitude;
-                } else {
-                    minLatitude= MIN(minLatitude, latitude);
-                    maxLatitude= MAX(maxLatitude, latitude);
-                }
-                long t = (long) json_number_value(value);
-                if (index == 0) {
-                    startTime = t;
-                    endTime = t;
-                } else {
-                    startTime = MIN(startTime, t);
-                    endTime = MAX(endTime, t);
+    int64_t startTime = INT64_MAX;
+    int64_t endTime = 0;
+
+    bson_error_t error;
+    bson_t *bson = NULL;
+
+    bson_value_t const *value;
+    bson_iter_t iter;
+
+    bson = bson_new_from_json((uint8_t const *) pJson, strlen(pJson), &error);
+
+    bool result = bson_iter_init(&iter, bson) &&
+                  bson_iter_find(&iter, "log");
+
+    if (result) {
+        value = bson_iter_value(&iter);
+        if (value->value_type == BSON_TYPE_ARRAY) {
+            bson_iter_t logItr;
+            bson_iter_t logEntryItr;
+            if (bson_iter_recurse(&iter, &logItr)) {
+                while (bson_iter_next(&logItr)) {
+                    value = bson_iter_value(&logItr);
+                    if (value->value_type == BSON_TYPE_DOCUMENT) {
+                        if (bson_iter_recurse(&logItr, &logEntryItr)) {
+                            // latitude
+                            bson_iter_find(&logEntryItr, "latitude");
+                            value = bson_iter_value(&logEntryItr);
+                            if (DB_bsonTypeIsNumber(&value->value_type)) {
+                                minLatitude = MIN(minLatitude, value->value.v_double);
+                                maxLatitude = MAX(maxLatitude, value->value.v_double);
+                            } else {
+                                strncpy(error.message, "log entry missing latitude", 504);
+                                result = false;
+                                break;
+                            }
+
+                            // longitude
+                            bson_iter_find(&logEntryItr, "longitude");
+                            value = bson_iter_value(&logEntryItr); //todo: crash
+                            if (DB_bsonTypeIsNumber(&value->value_type)) {
+                                minLongitude = MIN(minLongitude, value->value.v_double);
+                                maxLongitude = MAX(maxLongitude, value->value.v_double);
+                            } else {
+                                strncpy(error.message, "log entry missing longitude", 504);
+                                result = false;
+                                break;
+                            }
+
+                            // time
+                            bson_iter_find(&logEntryItr, "time");
+                            value = bson_iter_value(&logEntryItr);
+                            if (DB_bsonTypeIsNumber(&value->value_type)) {
+                                startTime = MIN(startTime, value->value.v_int64);
+                                endTime = MAX(endTime, value->value.v_int64);
+                            } else {
+                                strncpy(error.message, "log entry missing time", 504);
+                                result = false;
+                                break;
+                            }
+
+                            bson_iter_find(&logEntryItr, "latitude");
+                            value = bson_iter_value(&logEntryItr);
+                            if (DB_bsonTypeIsNumber(&value->value_type)) {
+
+                            } else {
+                                strncpy(error.message, "log entry missing latitude", 504);
+                                result = false;
+                                break;
+                            }
+                        } else {
+                            strncpy(error.message, "log entry missing values", 504);
+                            result = false;
+                            break;
+                        }
+                    } else {
+                        strncpy(error.message, "log entry not json", 504);
+                        result = false;
+                        break;
+                    }
                 }
             }
+        } else {
+            strncpy(error.message, "log is not an array", 504);
+            result = false;
+        }
 
-            json_t *box = json_object();
-            json_object_set_new(box, "min_latitude", json_real(minLatitude));
-            json_object_set_new(box, "max_latitude", json_real(maxLatitude));
-            json_object_set_new(box, "min_longitude", json_real(minLongitude));
-            json_object_set_new(box, "max_longitude", json_real(maxLongitude));
-            json_object_set_new(json, "bounding_box", box);
+        if (result) {
+            bson_t box;
+            bson_init(&box);
+            bson_append_double(&box, "min_latitude", -1, minLatitude);
+            bson_append_double(&box, "max_latitude", -1, maxLatitude);
+            bson_append_double(&box, "min_longitude", -1, minLongitude);
+            bson_append_double(&box, "max_longitude", -1, maxLongitude);
+            bson_append_document(bson, "bounding_box", -1, &box); // contents copied into heap allocated bson
+            bson_destroy(&box);
 
-            json_t *timeWindow = json_object();
-            json_object_set_new(timeWindow, "start_time", json_integer(startTime));
-            json_object_set_new(timeWindow, "end_time", json_integer(endTime));
-            json_object_set_new(json, "time_window", timeWindow);
+            bson_t timeWindow;
+            bson_init(&timeWindow);
+            bson_append_int64(&timeWindow, "start_time", -1, startTime);
+            bson_append_int64(&timeWindow, "end_time", -1, endTime);
+            bson_append_document(bson, "time_window", -1, &timeWindow); // contents copied into heap allocated bson
+            bson_destroy(&timeWindow);
         }
     }
 
-    resultBlock:
-    {
-        if (result) {
-            return json;
-        } else {
-            json_decref(json);
-            return NULL;
-        }
+    if (result) {
+        return bson;
+    } else {
+        printf("error validating gps log record %s\n", error.message);
+        bson_free(bson);
+        return NULL;
     }
 }
 
-json_t *_validateFenceRecord(char const *pJson) {
-    json_error_t error;
-    json_t *json = json_loads(pJson, strlen(pJson), &error);
+bool DB_bsonTypeIsNumber(bson_type_t *pType) {
+    bson_type_t type = *pType;
+    return (type == BSON_TYPE_INT64 || type == BSON_TYPE_INT32 || type == BSON_TYPE_DOUBLE);
+}
+
+bson_t *_validateFenceRecord(char const *pJson) {
+    bson_error_t error;
+    bson_t *bson = bson_new_from_json((uint8_t const *) pJson, strlen(pJson), &error);
+
+    bson_value_t const *value;
+    bson_iter_t iter;
+
     bool result = true;
-    if (json != NULL) {
-        json_t *obj = json_object_get(json, "identifier");
-        if (!json_is_string(obj)) {
-            result = false;
+    if (bson_iter_init(&iter, bson) && bson_iter_find(&iter, "identifier")) {
+        value = bson_iter_value(&iter);
+        if (value->value_type != BSON_TYPE_UTF8) {
+            return false;
         }
-        obj = json_object_get(json, "radius");
-        if (result && !json_is_number(obj)) {
-            result = false;
-        }
-        obj = json_object_get(json, "latitude");
-        if (result && !json_is_real(obj)) {
-            result = false;
-        }
-        obj = json_object_get(json, "longitude");
-        if (result && !json_is_real(obj)) {
-            result = false;
-        }
-        obj = json_object_get(json, "entry_time");
-        if (result && !json_is_number(obj)) {
-            result = false;
-        }
-    }
-    if (result) {
-        return json;
     } else {
-        json_decref(json);
+        result = false;
+    }
+    if (bson_iter_init(&iter, bson) && bson_iter_find(&iter, "radius")) {
+        value = bson_iter_value(&iter);
+        if (!DB_bsonTypeIsNumber(&value->value_type)) {
+            return false;
+        }
+    } else {
+        result = false;
+    }
+    if (bson_iter_init(&iter, bson) && bson_iter_find(&iter, "latitude")) {
+        value = bson_iter_value(&iter);
+        if (!DB_bsonTypeIsNumber(&value->value_type)) {
+            return false;
+        }
+    } else {
+        result = false;
+    }
+    if (bson_iter_init(&iter, bson) && bson_iter_find(&iter, "longitude")) {
+        value = bson_iter_value(&iter);
+        if (!DB_bsonTypeIsNumber(&value->value_type)) {
+            return false;
+        }
+    } else {
+        result = false;
+    }
+    if (bson_iter_init(&iter, bson) && bson_iter_find(&iter, "entry_time")) {
+        value = bson_iter_value(&iter);
+        if (!DB_bsonTypeIsNumber(&value->value_type)) {
+            return false;
+        }
+    } else {
+        result = false;
+    }
+
+    if (result) {
+        return bson;
+    } else {
+        printf("error validating fence record %s\n", error.message);
+        bson_free(bson);
         return NULL;
     }
 }
@@ -222,11 +277,8 @@ struct DB_Record *DB_getFenceRecord(char const *pIdentifier, mongoc_client_t *pC
     cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 1, 0, query, NULL, NULL);
 
     if (mongoc_cursor_next(cursor, &doc)) {
-        json_error_t error;
-        char *value = bson_as_json(doc, NULL);
-        retVal->record = json_loads(value, strlen(value), &error);
+        retVal->record = bson_copy(doc);
         retVal->message = _createMessage("ok");
-        bson_free(value);
     }
 
     bson_destroy(query);
@@ -255,24 +307,34 @@ struct DB_Record *DB_getGpsLogRecordList(mongoc_client_t *pClient) {
 
     cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 1000, 0, query, fields, NULL);
 
-    json_t *jsonArray = NULL;
+    bson_t jsonArray;
+    bson_init(&jsonArray);
+    bson_t *records = bson_new(); //freed with DB_Record
+    uint32_t i = 0;
+    char iStr[16];
+    char const *key;
     while (mongoc_cursor_next(cursor, &doc)) {
-        json_error_t error;
-        char *value = bson_as_json(doc, NULL);
+        //initialize jsonArray
         if (NULL == retVal->record) {
             retVal->message = _createMessage("ok");
-            retVal->record = json_object();
-            jsonArray = json_array();
-            json_object_set_new(retVal->record, "records", jsonArray);
+            retVal->record = records;
         }
-        json_array_append_new(jsonArray, json_loads(value, strlen(value), &error));
-        bson_free(value);
+
+        //http://api.mongodb.com/libbson/1.3.5/performance.html#keys
+        bson_uint32_to_string(i, &key, iStr, sizeof iStr);
+        BSON_APPEND_DOCUMENT(&jsonArray, key, doc);
+        ++i;
+    }
+
+    if (retVal->message && bson_count_keys(&jsonArray) > 0) {
+        BSON_APPEND_ARRAY(records, "records", &jsonArray);
     }
 
     bson_destroy(query);
     bson_destroy(fields);
     mongoc_cursor_destroy(cursor);
     mongoc_collection_destroy(collection);
+    bson_destroy(&jsonArray);
 
     return retVal;
 }
@@ -290,33 +352,40 @@ struct DB_Record *DB_getFenceRecordList(mongoc_client_t *pClient) {
     bson_t *query = bson_new();
     cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 1000, 0, query, NULL, NULL);
 
-    json_t *jsonArray = NULL;
+    bson_t jsonArray;
+    bson_init(&jsonArray);
+    bson_t *records = bson_new(); //freed with DB_Record
+    uint32_t i = 0;
+    char iStr[16];
+    char const *key;
     while (mongoc_cursor_next(cursor, &doc)) {
-        json_error_t error;
-        char *value = bson_as_json(doc, NULL);
         //todo: add whether there is a corresponding gps_log
 
         //initialize jsonArray
         if (NULL == retVal->record) {
             retVal->message = _createMessage("ok");
-            retVal->record = json_object();
-            jsonArray = json_array();
-            json_object_set_new(retVal->record, "records", jsonArray);
+            retVal->record = records;
         }
 
-        json_array_append_new(jsonArray, json_loads(value, strlen(value), &error));
-        bson_free(value);
+        //http://api.mongodb.com/libbson/1.3.5/performance.html#keys
+        bson_uint32_to_string(i, &key, iStr, sizeof iStr);
+        BSON_APPEND_DOCUMENT(&jsonArray, key, doc);
+        ++i;
+    }
+
+    if (retVal->message && bson_count_keys(&jsonArray) > 0) {
+        BSON_APPEND_ARRAY(records, "records", &jsonArray);
     }
 
     bson_destroy(query);
-
+    bson_destroy(&jsonArray);
     mongoc_cursor_destroy(cursor);
     mongoc_collection_destroy(collection);
 
     return retVal;
 }
 
-struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) {
+struct DB_Record *DB_getGpsLogRecord(int64_t pEpochTime, mongoc_client_t *pClient) {
     struct DB_Record *retVal = _allocateRecord();
 
     mongoc_collection_t *collection = mongoc_client_get_collection(pClient, DB, COLLECTION_GPS_LOGS);
@@ -342,13 +411,11 @@ struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient) 
     cursor = mongoc_collection_find(collection, MONGOC_QUERY_NONE, 0, 1, 0, &query, NULL, NULL);
 
     if (mongoc_cursor_next(cursor, &doc)) {
-        json_error_t error;
-        char *value = bson_as_json(doc, NULL);
-        retVal->record = json_loads(value, strlen(value), &error);
+        retVal->record = bson_copy(doc);
         retVal->message = _createMessage("ok");
-        bson_free(value);
     }
 
+    bson_destroy(&query);
     mongoc_cursor_destroy(cursor);
     mongoc_collection_destroy(collection);
 
@@ -367,6 +434,7 @@ void DB_deleteGpsLogRecord(char const *pIdentifier, mongoc_client_t *pClient) {
 
     mongoc_collection_remove(collection, MONGOC_REMOVE_SINGLE_REMOVE, &selector, NULL, &error);
     printf("error %s\n", error.message);
+    bson_destroy(&selector);
     mongoc_collection_destroy(collection);
 }
 
@@ -382,10 +450,11 @@ void DB_deleteFenceRecord(char const *pIdentifier, mongoc_client_t *pClient) {
 
     mongoc_collection_remove(collection, MONGOC_REMOVE_SINGLE_REMOVE, &selector, NULL, &error);
     printf("error %s\n", error.message);
+    bson_destroy(&selector);
     mongoc_collection_destroy(collection);
 }
 
-char *_createMessage(char const * const pMsg) {
+char *_createMessage(char const *const pMsg) {
     char *retVal = malloc(strlen(pMsg));
     strcpy(retVal, pMsg);
     return retVal;
@@ -401,7 +470,7 @@ struct DB_Record *_allocateRecord() {
 void DB_freeRecord(struct DB_Record *pResult) {
     if (NULL != pResult) {
         if (NULL != pResult->record) {
-            json_decref(pResult->record);
+            bson_free(pResult->record);
         }
         if (NULL != pResult->message) {
             free(pResult->message);

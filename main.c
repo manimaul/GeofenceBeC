@@ -1,5 +1,4 @@
 #include <microhttpd.h>
-#include <jansson.h>
 #include <string.h>
 #include <libmongoc-1.0/mongoc.h>
 #include <signal.h>
@@ -67,7 +66,8 @@ int _handlePostWithDbInsertBodyJson(struct MHD_Connection *pConn, struct MA_Hand
  * param pData - data to retrieve a MongoDb client from
  * param pConnInfo - connection info to retrieve the request body
  */
-int _handlePostFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData, struct MA_ConnectionInfo *pConnInfo);
+int _handlePostFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pData,
+                          struct MA_ConnectionInfo *pConnInfo);
 
 /**
  * Request handler for POST /gps_log endpoint
@@ -257,9 +257,9 @@ int _answerConnection(void *pCls,
         }
     }
 
-   /*
-    * Answer POST requests
-    */
+        /*
+         * Answer POST requests
+         */
     else if (0 == strcmp(pMethod, METHOD_POST)) {
         /*
          * Answer /fence_entry endpoint
@@ -276,9 +276,9 @@ int _answerConnection(void *pCls,
         }
     }
 
-   /*
-    * Answer POST requests
-    */
+        /*
+         * Answer POST requests
+         */
     else if (0 == strcmp(pMethod, METHOD_DELETE)) {
         /*
          * Answer /fence_entry endpoint
@@ -409,31 +409,80 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     client = mongoc_client_pool_pop(pool);
     struct DB_Record *record = DB_getFenceRecord(pId, client);
     struct DB_Record *logRecord = NULL;
-    json_t *actualEntryPoint = NULL;
-    if (record->record) { // Find corresponding log entry
-        json_t *entryTime = json_object_get(record->record, "entry_time");
-        if (json_is_number(entryTime)) {
-            double et = json_real_value(entryTime); //todo: fix loss of precision (jansson - json_loads)
-            logRecord = DB_getGpsLogRecord((long) et, client);
-            struct LocationInfo locationInfo;
-            double fenceLat = json_real_value(json_object_get(record->record, "latitude"));
-            double fenceLng = json_real_value(json_object_get(record->record, "longitude"));
-            double radius = json_real_value(json_object_get(record->record, "radius"));
+    bson_t *actualEntryPoint = NULL;
+    bson_value_t const *value = NULL;
+    struct LocationInfo locationInfo;
 
-            size_t index;
-            json_t *logObj;
-            json_array_foreach(json_object_get(logRecord->record, "log"), index, logObj) {
-                double ptLat = json_real_value(json_object_get(logObj, "latitude"));
-                double ptLng = json_real_value(json_object_get(logObj, "longitude"));
+    double fenceLat = 0;
+    double fenceLng = 0;
+    double radius = 0;
+    int64_t entryTime = 0;
+
+    if (record->record) { // Find corresponding log entry
+        bson_iter_t iter;
+        bool proceed;
+
+        if (bson_iter_init_find(&iter, record->record, "entry_time")) {
+            value = bson_iter_value(&iter);
+            entryTime = value->value.v_int64;
+            logRecord = DB_getGpsLogRecord(entryTime, client);
+            proceed = logRecord->record != NULL;
+        } else {
+            proceed = false;
+        }
+
+        if (proceed && bson_iter_init_find(&iter, record->record, "latitude")) {
+            value = bson_iter_value(&iter);
+            fenceLat = value->value.v_double;
+        } else {
+            proceed = false;
+        }
+
+        if (proceed && bson_iter_init_find(&iter, record->record, "longitude")) {
+            value = bson_iter_value(&iter);
+            fenceLng = value->value.v_double;
+        } else {
+            proceed = false;
+        }
+
+        if (proceed && bson_iter_init_find(&iter, record->record, "radius")) {
+            value = bson_iter_value(&iter);
+            radius = value->value.v_double;
+        } else {
+            proceed = false;
+        }
+
+        if (proceed && bson_iter_init_find(&iter, logRecord->record, "log")) {
+            bson_iter_t logItr;
+            bson_iter_recurse(&iter, &logItr);
+
+            bson_iter_t itemItr;
+            //bson_value_t const *logValue = bson_iter_value(&iter);
+            //bson_new_from_data(logValue->value.v_doc.data, logValue->value.v_doc.data_len);
+
+            while (bson_iter_next(&logItr)) {
+
+                bson_iter_recurse(&logItr, &itemItr);
+
+                bson_iter_find(&itemItr, "latitude");
+                value = bson_iter_value(&itemItr);
+                double ptLat = value->value.v_double;
+
+                bson_iter_find(&itemItr, "longitude");
+                value = bson_iter_value(&itemItr);
+                double ptLng = value->value.v_double;
+
                 LOC_calculateLocationInfo(&locationInfo, fenceLat, fenceLng, ptLat, ptLng);
-                json_object_set_new(logObj, "distance", json_real(locationInfo.distanceMeters));
                 if (locationInfo.distanceMeters <= radius) {
-                    double actualEntryTime = json_real_value(json_object_get(logObj, "time"));
-                    double entryTimeDelta = et - actualEntryTime;
-                    json_object_set_new(logObj, "entry_delta", json_real(entryTimeDelta));
-                    if (actualEntryPoint == NULL) {
-                        actualEntryPoint = logObj;
-                    }
+                    bson_iter_find(&itemItr, "time");
+                    value = bson_iter_value(&itemItr);
+                    int64_t actualEntryTime = value->value.v_int64;
+                    int64_t entryTimeDelta = entryTime - actualEntryTime;
+                    bson_value_t const *logItemValue = bson_iter_value(&logItr);
+                    actualEntryPoint = bson_new_from_data(logItemValue->value.v_doc.data,
+                                                          logItemValue->value.v_doc.data_len);
+                    BSON_APPEND_INT64(actualEntryPoint, "entry_delta", entryTimeDelta);
+                    break;
                 }
             }
         }
@@ -443,22 +492,26 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     /*
      * Craft json response
      */
-    json_t *json_response = json_object();
+    bson_t bsonResponse;
+    bson_init(&bsonResponse);
     unsigned int statusCode;
     if (record->record) {
-        json_object_set_new(json_response, "message", json_string(record->message));
-        json_object_set(json_response, "record", record->record); // not set_new because we free in cleanup
-        if (logRecord != NULL) {
-            json_object_set(json_response, "corresponding_log", logRecord->record);
-            json_object_set(json_response, "actual_entry", actualEntryPoint);
+        BSON_APPEND_UTF8(&bsonResponse, "message", record->message);
+        BSON_APPEND_DOCUMENT(&bsonResponse, "record", record->record);
+        if (logRecord != NULL && logRecord->record != NULL) {
+            BSON_APPEND_DOCUMENT(&bsonResponse, "corresponding_log", logRecord->record);
+            BSON_APPEND_DOCUMENT(&bsonResponse, "actual_entry", actualEntryPoint);
+        } else {
+            BSON_APPEND_NULL(&bsonResponse, "corresponding_log");
+            BSON_APPEND_NULL(&bsonResponse, "actual_entry");
         }
         statusCode = MHD_HTTP_OK;
     } else {
-        json_object_set_new(json_response, "message", json_string("DB_Record not found"));
-        json_object_set(json_response, "record", NULL);
+        BSON_APPEND_UTF8(&bsonResponse, "message", "record not found");
+        BSON_APPEND_NULL(&bsonResponse, "record");
         statusCode = MHD_HTTP_NOT_FOUND;
     }
-    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+    char *responseBody = bson_as_json(&bsonResponse, NULL);
 
     /*
      * Queue a json response
@@ -474,8 +527,8 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     MHD_destroy_response(response);
     DB_freeRecord(record);
     DB_freeRecord(logRecord);
-    json_decref(json_response);
-    free(responseBody);
+    bson_destroy(&bsonResponse);
+    bson_free(responseBody);
 
     return ret;
 }
@@ -493,18 +546,19 @@ int _handleGetGpsLogEntryList(struct MHD_Connection *pConn, struct MA_HandlerDat
     /*
      * Craft json response
      */
-    json_t *json_response = json_object();
+    bson_t bsonResponse;
+    bson_init(&bsonResponse);
     unsigned int statusCode;
     if (record->record) {
-        json_object_set_new(json_response, "message", json_string(record->message));
-        json_object_set(json_response, "record", record->record); // not set_new because we free in cleanup
+        BSON_APPEND_UTF8(&bsonResponse, "message", record->message);
+        BSON_APPEND_DOCUMENT(&bsonResponse, "record", record->record);
         statusCode = MHD_HTTP_OK;
     } else {
-        json_object_set_new(json_response, "message", json_string("DB_Record not found"));
-        json_object_set(json_response, "record", NULL);
+        BSON_APPEND_UTF8(&bsonResponse, "message", "record not found");
+        BSON_APPEND_NULL(&bsonResponse, "record");
         statusCode = MHD_HTTP_NOT_FOUND;
     }
-    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+    char *responseBody = bson_as_json(&bsonResponse, NULL);
 
     /*
      * Queue a json response
@@ -519,8 +573,8 @@ int _handleGetGpsLogEntryList(struct MHD_Connection *pConn, struct MA_HandlerDat
      */
     MHD_destroy_response(response);
     DB_freeRecord(record);
-    json_decref(json_response);
-    free(responseBody);
+    bson_destroy(&bsonResponse);
+    bson_free(responseBody);
 
     return ret;
 }
@@ -539,18 +593,19 @@ int _handleGetFenceEntryList(struct MHD_Connection *pConn, struct MA_HandlerData
     /*
      * Craft json response
      */
-    json_t *json_response = json_object();
+    bson_t bsonResponse;
+    bson_init(&bsonResponse);
     unsigned int statusCode;
     if (record->record) {
-        json_object_set_new(json_response, "message", json_string(record->message));
-        json_object_set(json_response, "record", record->record); // not set_new because we free in cleanup
+        BSON_APPEND_UTF8(&bsonResponse, "message", record->message);
+        BSON_APPEND_DOCUMENT(&bsonResponse, "record", record->record);
         statusCode = MHD_HTTP_OK;
     } else {
-        json_object_set_new(json_response, "message", json_string("DB_Record not found"));
-        json_object_set(json_response, "record", NULL);
+        BSON_APPEND_UTF8(&bsonResponse, "message", "record not found");
+        BSON_APPEND_NULL(&bsonResponse, "record");
         statusCode = MHD_HTTP_NOT_FOUND;
     }
-    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+    char *responseBody = bson_as_json(&bsonResponse, NULL);
 
     /*
      * Queue a json response
@@ -565,8 +620,8 @@ int _handleGetFenceEntryList(struct MHD_Connection *pConn, struct MA_HandlerData
      */
     MHD_destroy_response(response);
     DB_freeRecord(record);
-    json_decref(json_response);
-    free(responseBody);
+    bson_destroy(&bsonResponse);
+    bson_free(responseBody);
 
     return ret;
 }
@@ -584,18 +639,19 @@ int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *p
     /*
      * Craft json response
      */
-    json_t *json_response = json_object();
+    bson_t bsonResponse;
+    bson_init(&bsonResponse);
     unsigned int statusCode;
     if (record->record) {
-        json_object_set_new(json_response, "message", json_string(record->message));
-        json_object_set(json_response, "record", record->record); // not set_new because we free in cleanup
+        BSON_APPEND_UTF8(&bsonResponse, "message", record->message);
+        BSON_APPEND_DOCUMENT(&bsonResponse, "record", record->record);
         statusCode = MHD_HTTP_OK;
     } else {
-        json_object_set_new(json_response, "message", json_string("DB_Record not found"));
-        json_object_set(json_response, "record", NULL);
+        BSON_APPEND_UTF8(&bsonResponse, "message", "record not found");
+        BSON_APPEND_NULL(&bsonResponse, "record");
         statusCode = MHD_HTTP_NOT_FOUND;
     }
-    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+    char *responseBody = bson_as_json(&bsonResponse, NULL);
 
     /*
      * Queue a json response
@@ -610,8 +666,8 @@ int _handleGetGpsLogEntry(struct MHD_Connection *pConn, struct MA_HandlerData *p
      */
     MHD_destroy_response(response);
     DB_freeRecord(record);
-    json_decref(json_response);
-    free(responseBody);
+    bson_destroy(&bsonResponse);
+    bson_free(responseBody);
 
     return ret;
 }
@@ -631,14 +687,18 @@ int _handlePostWithDbInsertBodyJson(struct MHD_Connection *pConn, struct MA_Hand
     /*
      * Craft json response
      */
-    json_t *json_response = json_object();
     unsigned int statusCode = MHD_HTTP_BAD_REQUEST;
-    if (record) {
-        json_object_set_new(json_response, "message", json_string(record->message));
-        json_object_set(json_response, "record", record->record); // not set_new because we free in cleanup
+    bson_t bsonResponse;
+    bson_init(&bsonResponse);
+    if (record->record) {
+        BSON_APPEND_UTF8(&bsonResponse, "message", record->message);
+        BSON_APPEND_DOCUMENT(&bsonResponse, "record", record->record);
         statusCode = MHD_HTTP_OK;
+    } else {
+        BSON_APPEND_UTF8(&bsonResponse, "message", record->message);
+        BSON_APPEND_NULL(&bsonResponse, "record");
     }
-    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+    char *responseBody = bson_as_json(&bsonResponse, NULL);
 
     /*
      * Queue a json response
@@ -653,8 +713,8 @@ int _handlePostWithDbInsertBodyJson(struct MHD_Connection *pConn, struct MA_Hand
      */
     MHD_destroy_response(response);
     DB_freeRecord(record);
-    json_decref(json_response);
-    free(responseBody);
+    bson_destroy(&bsonResponse);
+    bson_free(responseBody);
 
     return ret;
 }
@@ -672,9 +732,10 @@ int _handleError(struct MHD_Connection *pConn) {
     /*
      * Craft json response
      */
-    json_t *json_response = json_object();
-    json_object_set_new(json_response, "message", json_string("Error"));
-    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+    bson_t bsonResponse;
+    bson_init(&bsonResponse);
+    BSON_APPEND_UTF8(&bsonResponse, "message", "error");
+    char *responseBody = bson_as_json(&bsonResponse, NULL);
 
     /*
      * Queue a json response
@@ -688,8 +749,8 @@ int _handleError(struct MHD_Connection *pConn) {
      * Cleanup
      */
     MHD_destroy_response(response);
-    json_decref(json_response);
-    free(responseBody);
+    bson_destroy(&bsonResponse);
+    bson_free(responseBody);
 
     return ret;
 }
@@ -699,9 +760,10 @@ int _handleNotFound(struct MHD_Connection *pConn) {
     /*
      * Craft json response
      */
-    json_t *json_response = json_object();
-    json_object_set_new(json_response, "message", json_string("Not Found"));
-    char *responseBody = json_dumps(json_response, JSON_COMPACT);
+    bson_t bsonResponse;
+    bson_init(&bsonResponse);
+    BSON_APPEND_UTF8(&bsonResponse, "message", "not found");
+    char *responseBody = bson_as_json(&bsonResponse, NULL);
 
     /*
      * Queue a json response
@@ -715,8 +777,8 @@ int _handleNotFound(struct MHD_Connection *pConn) {
      * Cleanup
      */
     MHD_destroy_response(response);
-    json_decref(json_response);
-    free(responseBody);
+    bson_destroy(&bsonResponse);
+    bson_free(responseBody);
 
     return ret;
 }
@@ -786,7 +848,7 @@ int main() {
         printf("GeoFence Http daemon running\n");
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-noreturn"
-        for (;;) {
+        for (; ;) {
             doSleep(10);
         }
 #pragma clang diagnostic pop

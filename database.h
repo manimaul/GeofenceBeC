@@ -6,7 +6,6 @@
 #define GEOFENCEBEC_DATABASE_H
 
 #include <libmongoc-1.0/mongoc.h>
-#include <jansson.h>
 
 #define DB_URL "mongodb://localhost:27017/"
 #define DB "geofence"
@@ -16,7 +15,7 @@
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 struct DB_Record {
-    json_t *record;
+    bson_t *record;
     char *message;
 };
 
@@ -65,7 +64,7 @@ struct DB_Record *DB_getFenceRecordList(mongoc_client_t *pClient);
  *
  * returns struct DB_Record which you must later DB_deleteRecord()
  */
-struct DB_Record *DB_getGpsLogRecord(long pEpochTime, mongoc_client_t *pClient);
+struct DB_Record *DB_getGpsLogRecord(int64_t pEpochTime, mongoc_client_t *pClient);
 
 /**
  * Delete a gps log record with an id.
@@ -81,5 +80,7 @@ void DB_deleteFenceRecord(char const *pIdentifier, mongoc_client_t *pClient);
  * Deallocate a record that has been retrieved
  */
 void DB_freeRecord(struct DB_Record *pRecord);
+
+bool DB_bsonTypeIsNumber(bson_type_t *pType);
 
 #endif //GEOFENCEBEC_DATABASE_H
