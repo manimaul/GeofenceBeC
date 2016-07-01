@@ -97,66 +97,52 @@ bson_t *_validateGpsLogRecord(char const *pJson) {
                 while (bson_iter_next(&logItr)) {
                     value = bson_iter_value(&logItr);
                     if (value->value_type == BSON_TYPE_DOCUMENT) {
-                        if (bson_iter_recurse(&logItr, &logEntryItr)) {
-                            // latitude
-                            bson_iter_find(&logEntryItr, "latitude");
+                        if (bson_iter_recurse(&logItr, &logEntryItr) && bson_iter_find(&logEntryItr, "latitude")) {
                             value = bson_iter_value(&logEntryItr);
-                            if (DB_bsonTypeIsNumber(&value->value_type)) {
+                            if (value->value_type == BSON_TYPE_DOUBLE) {
                                 minLatitude = MIN(minLatitude, value->value.v_double);
                                 maxLatitude = MAX(maxLatitude, value->value.v_double);
                             } else {
-                                strncpy(error.message, "log entry missing latitude", 504);
+                                strncpy(error.message, "log entry missing latitude", sizeof(error.message));
                                 result = false;
                                 break;
                             }
+                        }
 
-                            // longitude
-                            bson_iter_find(&logEntryItr, "longitude");
-                            value = bson_iter_value(&logEntryItr); //todo: crash
-                            if (DB_bsonTypeIsNumber(&value->value_type)) {
+                        if (bson_iter_recurse(&logItr, &logEntryItr) && bson_iter_find(&logEntryItr, "longitude")) {
+                            value = bson_iter_value(&logEntryItr);
+                            if (value->value_type == BSON_TYPE_DOUBLE) {
                                 minLongitude = MIN(minLongitude, value->value.v_double);
                                 maxLongitude = MAX(maxLongitude, value->value.v_double);
                             } else {
-                                strncpy(error.message, "log entry missing longitude", 504);
+                                strncpy(error.message, "log entry missing longitude", sizeof(error.message));
                                 result = false;
                                 break;
                             }
-
-                            // time
-                            bson_iter_find(&logEntryItr, "time");
-                            value = bson_iter_value(&logEntryItr);
-                            if (DB_bsonTypeIsNumber(&value->value_type)) {
-                                startTime = MIN(startTime, value->value.v_int64);
-                                endTime = MAX(endTime, value->value.v_int64);
-                            } else {
-                                strncpy(error.message, "log entry missing time", 504);
-                                result = false;
-                                break;
-                            }
-
-                            bson_iter_find(&logEntryItr, "latitude");
-                            value = bson_iter_value(&logEntryItr);
-                            if (DB_bsonTypeIsNumber(&value->value_type)) {
-
-                            } else {
-                                strncpy(error.message, "log entry missing latitude", 504);
-                                result = false;
-                                break;
-                            }
-                        } else {
-                            strncpy(error.message, "log entry missing values", 504);
-                            result = false;
-                            break;
                         }
+
+                        if (bson_iter_recurse(&logItr, &logEntryItr) && bson_iter_find(&logEntryItr, "time")) {
+                            value = bson_iter_value(&logEntryItr);
+                            int32_t t = DB_bsonValueInt32(value);
+                            if (t != 0) {
+                                startTime = MIN(startTime, t);
+                                endTime = MAX(endTime, t);
+                            } else {
+                                strncpy(error.message, "log entry missing time", sizeof(error.message));
+                                result = false;
+                                break;
+                            }
+                        }
+
                     } else {
-                        strncpy(error.message, "log entry not json", 504);
+                        strncpy(error.message, "log entry not json", sizeof(error.message));
                         result = false;
                         break;
                     }
                 }
             }
         } else {
-            strncpy(error.message, "log is not an array", 504);
+            strncpy(error.message, "log is not an array", sizeof(error.message));
             result = false;
         }
 
@@ -191,6 +177,22 @@ bson_t *_validateGpsLogRecord(char const *pJson) {
 bool DB_bsonTypeIsNumber(bson_type_t *pType) {
     bson_type_t type = *pType;
     return (type == BSON_TYPE_INT64 || type == BSON_TYPE_INT32 || type == BSON_TYPE_DOUBLE);
+}
+
+int32_t DB_bsonValueInt32(bson_value_t const *pValue) {
+    if (NULL == pValue) {
+        return 0;
+    }
+    switch (pValue->value_type) {
+        case BSON_TYPE_INT32:
+            return pValue->value.v_int32;
+        case BSON_TYPE_DOUBLE:
+            return (int32_t) pValue->value.v_double;
+        case BSON_TYPE_DATE_TIME:
+            return (int32_t) (pValue->value.v_datetime / 1000);
+        default:
+            return 0;
+    }
 }
 
 bson_t *_validateFenceRecord(char const *pJson) {

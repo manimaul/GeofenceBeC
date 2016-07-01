@@ -83,4 +83,9 @@ void DB_freeRecord(struct DB_Record *pRecord);
 
 bool DB_bsonTypeIsNumber(bson_type_t *pType);
 
+/**
+ * Get the value as a 32 bit integer.
+ */
+int32_t DB_bsonValueInt32(bson_value_t const *pValue);
+
 #endif //GEOFENCEBEC_DATABASE_H

@@ -20,12 +20,6 @@ http://api.mongodb.com/c/current/<br/>
 OSX: `brew install mongo-c`<br>
 Ubuntu / Linux: `sudo apt-get install libmongoc-dev libbson-dev`
 
-* Jansson<br/>
-http://www.digip.org/jansson/
-https://jansson.readthedocs.io/en/2.7/apiref.html<br/>
-OSX: `brew install jansson`<br>
-Ubuntu / Linux: `sudo apt-get install libjansson-dev`
-
 * Libmicrohttpd<br/>
 https://www.gnu.org/software/libmicrohttpd/<br/>
 OSX: `brew install microhttpd`<br>

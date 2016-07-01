@@ -416,7 +416,7 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
     double fenceLat = 0;
     double fenceLng = 0;
     double radius = 0;
-    int64_t entryTime = 0;
+    int32_t entryTime = 0;
 
     if (record->record) { // Find corresponding log entry
         bson_iter_t iter;
@@ -424,7 +424,7 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
 
         if (bson_iter_init_find(&iter, record->record, "entry_time")) {
             value = bson_iter_value(&iter);
-            entryTime = value->value.v_int64;
+            entryTime = DB_bsonValueInt32(value);
             logRecord = DB_getGpsLogRecord(entryTime, client);
             proceed = logRecord->record != NULL;
         } else {
@@ -457,31 +457,33 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
             bson_iter_recurse(&iter, &logItr);
 
             bson_iter_t itemItr;
-            //bson_value_t const *logValue = bson_iter_value(&iter);
-            //bson_new_from_data(logValue->value.v_doc.data, logValue->value.v_doc.data_len);
 
             while (bson_iter_next(&logItr)) {
+                double ptLat, ptLng;
+                if (bson_iter_recurse(&logItr, &itemItr) && bson_iter_find(&itemItr, "latitude")) {
+                    value = bson_iter_value(&itemItr);
+                    ptLat = value->value.v_double;
+                } else {
+                    break;
+                }
 
-                bson_iter_recurse(&logItr, &itemItr);
-
-                bson_iter_find(&itemItr, "latitude");
-                value = bson_iter_value(&itemItr);
-                double ptLat = value->value.v_double;
-
-                bson_iter_find(&itemItr, "longitude");
-                value = bson_iter_value(&itemItr);
-                double ptLng = value->value.v_double;
+                if (bson_iter_recurse(&logItr, &itemItr) && bson_iter_find(&itemItr, "longitude")) {
+                    value = bson_iter_value(&itemItr);
+                    ptLng = value->value.v_double;
+                } else {
+                    break;
+                }
 
                 LOC_calculateLocationInfo(&locationInfo, fenceLat, fenceLng, ptLat, ptLng);
                 if (locationInfo.distanceMeters <= radius) {
                     bson_iter_find(&itemItr, "time");
                     value = bson_iter_value(&itemItr);
-                    int64_t actualEntryTime = value->value.v_int64;
-                    int64_t entryTimeDelta = entryTime - actualEntryTime;
+                    int32_t actualEntryTime = DB_bsonValueInt32(value);
+                    int32_t entryTimeDelta = entryTime - actualEntryTime;
                     bson_value_t const *logItemValue = bson_iter_value(&logItr);
                     actualEntryPoint = bson_new_from_data(logItemValue->value.v_doc.data,
                                                           logItemValue->value.v_doc.data_len);
-                    BSON_APPEND_INT64(actualEntryPoint, "entry_delta", entryTimeDelta);
+                    BSON_APPEND_INT32(actualEntryPoint, "entry_delta", entryTimeDelta);
                     break;
                 }
             }
@@ -500,7 +502,11 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
         BSON_APPEND_DOCUMENT(&bsonResponse, "record", record->record);
         if (logRecord != NULL && logRecord->record != NULL) {
             BSON_APPEND_DOCUMENT(&bsonResponse, "corresponding_log", logRecord->record);
-            BSON_APPEND_DOCUMENT(&bsonResponse, "actual_entry", actualEntryPoint);
+            if (actualEntryPoint != NULL) {
+                BSON_APPEND_DOCUMENT(&bsonResponse, "actual_entry", actualEntryPoint);
+            } else {
+                BSON_APPEND_NULL(&bsonResponse, "actual_entry");
+            }
         } else {
             BSON_APPEND_NULL(&bsonResponse, "corresponding_log");
             BSON_APPEND_NULL(&bsonResponse, "actual_entry");

@@ -14,44 +14,38 @@ Mongodb console
 =====
 
 $mongo
->use upkids
+>`use geofence`
+>`db.getCollectionNames()`
+>`db.fences.find().pretty()`
+>`db.fences.insert({ "key" : "value" })`
 
->db.usercollection.find().pretty()
->db.usercollection.insert({ "username" : "testuser1", "email" : "testuser1@testdomain.com" })
-
->newstuff = [{ "username" : "testuser2", "email" : "testuser2@testdomain.com" }, { "username" : "testuser3", "email" : "testuser3@testdomain.com" }]
->db.usercollection.insert(newstuff);
->
+>`new_stuff = [{ "key" : "value", "qt1" : 1 }, { "key" : "value", "qty" : 2 }]`
+>`db.usercollection.insert(new_stuff);`
 
 Backup
 ======
 
-mongodump -d prod -o prod_dump_thurs_oct8_2015/
+mongodump -d geofence -o geofence_dump/
 
 
 Restore
 ======
 
-mongorestore -d new_db_name mongo_db_dump/db_name
-
+mongorestore -d geofence geofence_dump/geofence
 
 Shell
 ======
 Start shell with command ```mongo```
 Exit shell with command ```quit()```
 
-show dbs
-use geofence 
-show collections
-db.fences.find({})
-db.gps_logs.find({},{_id:1, time_window:1})
-db.gps_logs.remove({_id:ObjectId("")})
-
-db.users.update({"user_name" : "wkamp"},{$set: {"hash": "SzudL+cYLrREGAvNVwZJdRX7OhP0BdhfVFpyc9ic+Nk="}})
-db.users.update({"user_name" : "user"},{$set: {"organization": "Example"}})
-
-db.getCollection('lessons').find({"html_content": {$regex : ".*Search Term*"}})
-db.getCollection('lessons').find({"html_content": {$regex : "Search Term"}})
-
-db.fs.files.find({},{filename:1})
-db.fs.files.remove({_id:ObjectId("56131b73d4c6fe08421b9f3b")})
+`show dbs`</br>
+`use geofence` </br>
+`show collections`</br>
+`db.fences.find({})`</br>
+`db.gps_logs.find({},{_id:1, time_window:1})`</br>
+`db.gps_logs.remove({_id:ObjectId("577483ad421aa94fa02cc316")})`</br>
+`db.users.update({"key" : "value"},{$set: {"qty": 1}})`</br>
+`db.getCollection('lessons').find({"html_content": {$regex : ".*Search Term*"}})`</br>
+`db.getCollection('lessons').find({"html_content": {$regex : "Search Term"}})`</br>
+`db.fs.files.find({},{filename:1})`</br>
+`db.fs.files.remove({_id:ObjectId("56131b73d4c6fe08421b9f3b")})`</br>
