@@ -460,6 +460,7 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
 
             while (bson_iter_next(&logItr)) {
                 double ptLat, ptLng;
+                int32_t ptTime;
                 if (bson_iter_recurse(&logItr, &itemItr) && bson_iter_find(&itemItr, "latitude")) {
                     value = bson_iter_value(&itemItr);
                     ptLat = value->value.v_double;
@@ -474,12 +475,16 @@ int _handleGetFenceEntry(struct MHD_Connection *pConn, struct MA_HandlerData *pD
                     break;
                 }
 
+                if (bson_iter_recurse(&logItr, &itemItr) && bson_iter_find(&itemItr, "time")) {
+                    value = bson_iter_value(&itemItr);
+                    ptTime = DB_bsonValueInt32(value);
+                } else {
+                    break;
+                }
+
                 LOC_calculateLocationInfo(&locationInfo, fenceLat, fenceLng, ptLat, ptLng);
                 if (locationInfo.distanceMeters <= radius) {
-                    bson_iter_find(&itemItr, "time");
-                    value = bson_iter_value(&itemItr);
-                    int32_t actualEntryTime = DB_bsonValueInt32(value);
-                    int32_t entryTimeDelta = entryTime - actualEntryTime;
+                    int32_t entryTimeDelta = entryTime - ptTime;
                     bson_value_t const *logItemValue = bson_iter_value(&logItr);
                     actualEntryPoint = bson_new_from_data(logItemValue->value.v_doc.data,
                                                           logItemValue->value.v_doc.data_len);
