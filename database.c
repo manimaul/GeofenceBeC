@@ -174,7 +174,7 @@ bson_t *_validateGpsLogRecord(char const *pJson) {
     }
 }
 
-bool DB_bsonTypeIsNumber(bson_type_t *pType) {
+bool DB_bsonTypeIsNumber(bson_type_t const *pType) {
     bson_type_t type = *pType;
     return (type == BSON_TYPE_INT64 || type == BSON_TYPE_INT32 || type == BSON_TYPE_DOUBLE);
 }

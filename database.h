@@ -81,7 +81,7 @@ void DB_deleteFenceRecord(char const *pIdentifier, mongoc_client_t *pClient);
  */
 void DB_freeRecord(struct DB_Record *pRecord);
 
-bool DB_bsonTypeIsNumber(bson_type_t *pType);
+bool DB_bsonTypeIsNumber(bson_type_t const *pType);
 
 /**
  * Get the value as a 32 bit integer.
