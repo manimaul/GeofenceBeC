@@ -6,9 +6,21 @@
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Description:       geofence back end service
+#
+# TO INSTALL
+# copy to /etc/init.d/geofencebe
+# chmod +x geofencebe
+# update-rc.d geofencebe defaults
+# touch /var/log/geofencebe.log
+# service geofencebe start
+#
+# TO UNINSTALL
+# service geofencebe stop
+# update-rc.d -f geofencebe remove
+#
 ### END INIT INFO
 
-SCRIPT=GeoFenceBeC
+SCRIPT=/usr/local/bin/GeoFenceBeC
 RUNAS=daemon
 
 PIDFILE=/var/run/geofencebe.pid
@@ -35,19 +47,6 @@ stop() {
   echo 'Service stopped' >&2
 }
 
-uninstall() {
-  echo -n "Are you really sure you want to uninstall this service? That cannot be undone. [yes|No] "
-  local SURE
-  read SURE
-  if [ "$SURE" = "yes" ]; then
-    stop
-    rm -f "$PIDFILE"
-    echo "Notice: log file is not be removed: '$LOGFILE'" >&2
-    update-rc.d -f geofencebe remove
-    rm -fv "$0"
-  fi
-}
-
 case "$1" in
   start)
     start
@@ -55,13 +54,10 @@ case "$1" in
   stop)
     stop
     ;;
-  uninstall)
-    uninstall
-    ;;
   retart)
     stop
     start
     ;;
   *)
-    echo "Usage: $0 {start|stop|restart|uninstall}"
+    echo "Usage: $0 {start|stop|restart}"
 esac
